@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>SR Video Lab</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230c0d10'/%3E%3Crect x='2' y='3' width='6' height='10' fill='%236ea8fe'/%3E%3Crect x='8' y='3' width='6' height='10' fill='%23e8a838'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="wordmark" title="SR Video Lab">
+        <span class="mark" aria-hidden="true"></span>
+        <span class="word">SR Video Lab</span>
+      </div>
+
+      <label class="search">
+        <span class="sr-only">Search library</span>
+        <input type="search" id="search" placeholder="Search title, notes, licence, file…" autocomplete="off" spellcheck="false">
+      </label>
+
+      <div class="top-actions">
+        <span id="saveStatus" class="save-pill" aria-live="polite">Autosaved locally</span>
+        <button type="button" class="btn" id="btnLoadFolder" aria-label="Load video folder">Load video folder</button>
+        <button type="button" class="btn btn-ghost" id="btnImport" aria-label="Import JSON">Import JSON</button>
+        <button type="button" class="btn btn-ghost" id="btnExport" aria-label="Export JSON">Export JSON</button>
+        <button type="button" class="btn btn-ghost" id="btnCategories" aria-label="Edit categories">Categories</button>
+      </div>
+
+      <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
+      <input type="file" id="jsonInput" accept="application/json,.json" hidden>
+    </header>
+
+    <div class="workspace">
+      <aside class="library" id="library">
+        <div class="cat-chips" id="catChips" role="tablist" aria-label="Filter by category"></div>
+        <div class="lib-scroll" id="libraryList" role="list"></div>
+      </aside>
+
+      <section class="stage" id="stage">
+        <div class="picture" id="picture" data-mode="single">
+          <div class="pane pane-a" id="paneA">
+            <video id="videoA" playsinline preload="auto" tabindex="-1" controlslist="nofullscreen nodownload noremoteplayback" disablepictureinpicture></video>
+            <div class="pane-missing" id="missingA" hidden>Not on disk — load folder</div>
+            <span class="pane-label" id="labelA"></span>
+          </div>
+          <div class="wipe-divider" id="wipeDivider" hidden title="Drag to wipe">
+            <span class="wipe-nub"></span>
+          </div>
+          <div class="pane pane-b" id="paneB" hidden>
+            <video id="videoB" playsinline preload="auto" muted tabindex="-1" controlslist="nofullscreen nodownload noremoteplayback" disablepictureinpicture></video>
+            <div class="pane-missing" id="missingB" hidden>Not on disk — load folder</div>
+            <span class="pane-label" id="labelB"></span>
+          </div>
+          <div class="placeholder" id="placeholder">
+            <p class="ph-kicker">No clip selected</p>
+            <p class="ph-body" id="placeholderBody">Load a folder of MP4s named category-title-resolution[-tech].mp4</p>
+          </div>
+        </div>
+
+        <div class="deck" id="deck">
+          <div class="mode-tabs" id="modeTabs" role="tablist" aria-label="Compare mode">
+            <button type="button" class="tab is-on" data-mode="single" aria-label="Single mode">Single</button>
+            <button type="button" class="tab" data-mode="wipe" aria-label="Wipe compare">Wipe</button>
+            <button type="button" class="tab" data-mode="sbs" aria-label="Side by side">Side by side</button>
+          </div>
+          <div class="fps-row" id="fpsRow">
+            <span class="fps-lab">FPS</span>
+            <div class="fps-chips" id="fpsChips" role="listbox" aria-label="Frame rate"></div>
+          </div>
+          <div class="variant-chips" id="variantChips" aria-label="Resolution"></div>
+          <div class="ab-row" id="abRow">
+            <label class="ab">
+              <span>A</span>
+              <select id="selectA" aria-label="Variant A" disabled></select>
+            </label>
+            <label class="ab" id="abB">
+              <span>B</span>
+              <select id="selectB" aria-label="Variant B" disabled></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="transport" id="transport">
+          <button type="button" class="icon-btn" id="btnPlay" title="Play / Pause (Space) · F8 play · F9 stop" aria-label="Play">▶</button>
+          <button type="button" class="icon-btn" id="btnPrevFrame" title="Previous frame (←)" aria-label="Previous frame">‹</button>
+          <button type="button" class="icon-btn" id="btnNextFrame" title="Next frame (→)" aria-label="Next frame">›</button>
+          <button type="button" class="icon-btn" id="btnMute" title="Mute primary" aria-label="Mute" aria-pressed="false">🔊</button>
+          <div class="seek-wrap">
+            <input type="range" id="seek" min="0" max="0" step="0.001" value="0" aria-label="Seek" disabled>
+            <span class="timecode" id="timeLabel">0:00.00 / 0:00.00</span>
+          </div>
+          <div class="speeds" id="speeds" role="group" aria-label="Playback speed"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="btnFs" title="Fullscreen the stage (F)" aria-label="Fullscreen">Fullscreen</button>
+        </div>
+      </section>
+
+      <aside class="inspector" id="inspector">
+        <div class="insp-empty" id="inspectorEmpty">
+          <p>Select a group to edit title, category, licence, and notes.</p>
+        </div>
+        <form class="insp-form" id="inspectorForm" hidden>
+          <p class="in-place-banner">Files stay <strong>in place</strong> on disk. Metadata only — video bytes are never copied.</p>
+          <label class="field">
+            <span>Title</span>
+            <input type="text" id="fieldTitle" autocomplete="off" spellcheck="true" aria-label="Display title">
+          </label>
+          <label class="field">
+            <span>Category</span>
+            <select id="fieldCategory" aria-label="Category"></select>
+          </label>
+          <label class="field">
+            <span>Licence</span>
+            <input type="text" id="fieldLicense" autocomplete="off" placeholder="e.g. CC-BY 3.0" aria-label="Licence">
+          </label>
+          <label class="field">
+            <span>Notes</span>
+            <textarea id="fieldNotes" rows="7" placeholder="Source, encode, observations…" aria-label="Notes"></textarea>
+          </label>
+          <div class="var-head">On-disk variants</div>
+          <ul class="var-list" id="variantList"></ul>
+          <button type="button" class="btn btn-danger" id="btnDeleteGroup" aria-label="Remove saved data for this group">Remove saved data for this group</button>
+        </form>
+      </aside>
+    </div>
+  </div>
+
+  <div class="drop-veil" id="dropOverlay" hidden>
+    <div class="drop-card">
+      <p>Drop a folder of MP4s</p>
+      <small>Files stay on disk — nothing is copied</small>
+    </div>
+  </div>
+
+  <div class="modal-root" id="catModal" hidden>
+    <div class="modal-scrim" data-close="modal"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="catModalTitle">
+      <header class="modal-head">
+        <h2 id="catModalTitle">Categories</h2>
+        <button type="button" class="icon-btn" id="btnCloseModal" title="Close" aria-label="Close" data-close="modal">✕</button>
+      </header>
+      <p class="modal-lead">Id is the filename prefix (letters/digits). Deleting a category reassigns its groups to Uncategorized.</p>
+      <ul class="cat-edit-list" id="catEditList"></ul>
+      <form class="cat-add" id="catAddForm">
+        <input type="text" id="newCatId" maxlength="8" placeholder="id" aria-label="New category id" autocomplete="off" spellcheck="false">
+        <input type="text" id="newCatName" placeholder="Name" aria-label="New category name" autocomplete="off">
+        <input type="color" id="newCatColor" value="#7c9cff" aria-label="New category colour" title="Colour">
+        <button type="submit" class="btn" aria-label="Add category">Add</button>
+      </form>
+      <div class="palette" id="palette" hidden></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+{
+  "categories": [
+    {
+      "id": "a",
+      "name": "Animations",
+      "color": "#7c9cff"
+    },
+    {
+      "id": "s",
+      "name": "Sport",
+      "color": "#5eead4"
+    },
+    {
+      "id": "c",
+      "name": "Cinema",
+      "color": "#f0abfc"
+    }
+  ],
+  "groups": [
+    {
+      "id": "a-big-buck-bunny",
+      "title": "Big Buck Bunny",
+      "categoryId": "a",
+      "license": "CC-BY 3.0 \u2014 Blender Foundation",
+      "notes": "Classic open movie. Compare 360p/720p originals against VSR and RealESRGAN upscales.",
+      "order": 0,
+      "variants": {
+        "360p": {
+          "file": "a-big-buck-bunny-360p.mp4",
+          "path": "clips/a-big-buck-bunny-360p.mp4",
+          "resolution": "360p",
+          "tech": "",
+          "fps": 60
+        },
+        "720p": {
+          "file": "a-big-buck-bunny-720p.mp4",
+          "path": "clips/a-big-buck-bunny-720p.mp4",
+          "resolution": "720p",
+          "tech": "",
+          "fps": 60
+        },
+        "720p-VSR": {
+          "file": "a-big-buck-bunny-720p-VSR.mp4",
+          "path": "clips/a-big-buck-bunny-720p-VSR.mp4",
+          "resolution": "720p",
+          "tech": "VSR",
+          "fps": 60
+        },
+        "720p-RealESRGAN": {
+          "file": "a-big-buck-bunny-720p-RealESRGAN.mp4",
+          "path": "clips/a-big-buck-bunny-720p-RealESRGAN.mp4",
+          "resolution": "720p",
+          "tech": "RealESRGAN",
+          "fps": 60
+        },
+        "4k": {
+          "file": "a-big-buck-bunny-4k.mp4",
+          "path": "clips/a-big-buck-bunny-4k.mp4",
+          "resolution": "4k",
+          "tech": "",
+          "fps": 60
+        },
+        "720p-24fps": {
+          "file": "a-big-buck-bunny-720p-24fps.mp4",
+          "path": "clips/a-big-buck-bunny-720p-24fps.mp4",
+          "resolution": "720p",
+          "fps": 24,
+          "tech": ""
+        }
+      }
+    },
+    {
+      "id": "s-goal-slowmo",
+      "title": "Goal Slowmo",
+      "categoryId": "s",
+      "license": "",
+      "notes": "Sport slow-motion clip.",
+      "order": 1,
+      "variants": {
+        "1080p": {
+          "file": "s-goal-slowmo-1080p.mp4",
+          "path": "clips/s-goal-slowmo-1080p.mp4",
+          "resolution": "1080p",
+          "tech": "",
+          "fps": 60
+        }
+      }
+    },
+    {
+      "id": "c-night-street",
+      "title": "Night Street",
+      "categoryId": "c",
+      "license": "",
+      "notes": "Low-light cinema street. Topaz upscale vs original 1080p.",
+      "order": 2,
+      "variants": {
+        "1080p-Topaz": {
+          "file": "c-night-street-1080p-Topaz.mp4",
+          "path": "clips/c-night-street-1080p-Topaz.mp4",
+          "resolution": "1080p",
+          "tech": "Topaz",
+          "fps": 60
+        }
+      }
+    }
+  ],
+  "settings": {}
+}
