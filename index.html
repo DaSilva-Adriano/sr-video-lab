@@ -23,7 +23,7 @@
 
       <div class="top-actions">
         <span id="saveStatus" class="save-pill" aria-live="polite">Autosaved locally</span>
-        <button type="button" class="btn" id="btnLoadFolder" aria-label="Load video folder">Load video folder</button>
+        <button type="button" class="btn" id="btnLoadFolder" aria-label="Load video folder" title="Chrome folder picker with write access, so files can be renamed">Load video folder</button>
         <button type="button" class="btn btn-ghost" id="btnImport" aria-label="Import JSON">Import JSON</button>
         <button type="button" class="btn btn-ghost" id="btnExport" aria-label="Export JSON">Export JSON</button>
         <button type="button" class="btn btn-ghost" id="btnCategories" aria-label="Edit categories">Categories</button>
@@ -107,6 +107,15 @@
             <span>Title</span>
             <input type="text" id="fieldTitle" autocomplete="off" spellcheck="true" aria-label="Display title">
           </label>
+          <div class="rename-box" id="renameBox">
+            <label class="field">
+              <span>Rename files</span>
+              <input type="text" id="fieldRenameSlug" autocomplete="off" spellcheck="false" placeholder="title-in-filename" aria-label="Filename title slug">
+            </label>
+            <p class="rename-hint" id="renameHint"></p>
+            <ul class="rename-preview" id="renamePreview" hidden></ul>
+            <button type="button" class="btn" id="btnRenameFiles">Rename files on disk</button>
+          </div>
           <label class="field">
             <span>Category</span>
             <select id="fieldCategory" aria-label="Category"></select>

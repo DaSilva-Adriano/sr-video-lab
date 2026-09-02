@@ -772,6 +772,38 @@ input:disabled {
 
 .in-place-banner strong { color: var(--ok); font-weight: 650; }
 
+.rename-box {
+  margin: 2px 0 12px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: var(--r);
+}
+.rename-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--mute);
+  line-height: 1.45;
+}
+.rename-preview {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  max-height: 120px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.rename-preview li {
+  margin: 0 0 4px;
+  word-break: break-all;
+  color: var(--dim);
+}
+.rename-old { color: var(--mute); }
+.rename-arrow { color: var(--mute); }
+.rename-new { color: var(--ok); }
+.rename-box .btn { width: 100%; }
+
 .field {
   display: flex;
   flex-direction: column;

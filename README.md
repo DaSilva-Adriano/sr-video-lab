@@ -85,6 +85,7 @@ Working metadata is autosaved to `localStorage` key `sr-video-lab-db` on every c
 - **Export JSON** downloads `videos.json` (categories, groups, variant file/path/resolution/tech, settings). No blob URLs or File objects.
 - **Import JSON** (file picker) merges by group id: incoming fields overlay existing; variants merge key-by-key; categories merge by id (incoming name/color win). New groups/categories are appended.
 - **Remove saved data for this group** (inspector, with confirm) deletes that group from the library and localStorage, even if you already loaded its folder. Video files on disk are never touched. Load the folder again to re-import them as a fresh group.
+- **Rename files** (inspector) changes the title slug in every filename in the group — the part after the category id and before the resolution. Category, resolution, fps, and tech stay the same. Example: `a-big-buck-bunny-720p-24fps-VSR.mp4` → `a-new-name-720p-24fps-VSR.mp4`. Chrome renames the real files in place (no copy) when the folder was opened with **Load video folder** (write access). Preview + confirm. Collisions abort.
 
 ## Categories
 
