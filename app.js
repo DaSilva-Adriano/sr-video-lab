@@ -1506,6 +1506,11 @@
     }
     var hud = $("zoomHud");
     if (hud) hud.hidden = !(placeholder && placeholder.hidden);
+    var canShot = canCaptureShot();
+    var shotIds = ["btnShot", "btnShotHud"];
+    for (i = 0; i < shotIds.length; i++) {
+      if ($(shotIds[i])) $(shotIds[i]).disabled = !canShot;
+    }
   }
 
   function zoomAt(clientX, clientY, factor) {
@@ -2006,6 +2011,198 @@
     renderAll();
   }
 
+  function canCaptureShot() {
+    return !!(picture && placeholder && placeholder.hidden && videoA && videoA.getAttribute("src"));
+  }
+
+  function fileSafe(s) {
+    return String(s || "")
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "clip";
+  }
+
+  function stampNow() {
+    var d = new Date();
+    function pad(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+  }
+
+  function slotFileTag(v) {
+    if (!v) return "none";
+    return fileSafe(v.resolution || "clip") + "-" + fileSafe(techLabel(v.tech));
+  }
+
+  function zoomFileTag() {
+    return fileSafe(String(formatZoom(state.zoom)).replace(/×/g, "x"));
+  }
+
+  function screenshotFilename() {
+    var g = currentGroup();
+    var name = fileSafe((g && g.title) || "clip");
+    var va = g && g.variants[state.keyA];
+    var vb = g && g.variants[state.keyB];
+    var left = slotFileTag(va);
+    var zoom = zoomFileTag();
+    var ts = stampNow();
+    if (state.mode === "single" || !vb) return name + "-left-" + left + "-" + zoom + "-" + ts + ".png";
+    return name + "-left-" + left + "-right-" + slotFileTag(vb) + "-" + zoom + "-" + ts + ".png";
+  }
+
+  function paneBoxCss(el, picRect) {
+    if (!el) return { x: 0, y: 0, w: picRect.width, h: picRect.height };
+    var r = el.getBoundingClientRect();
+    return {
+      x: r.left - picRect.left,
+      y: r.top - picRect.top,
+      w: r.width,
+      h: r.height
+    };
+  }
+
+  function drawVideoInPane(ctx, video, pane) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(pane.x, pane.y, pane.w, pane.h);
+    ctx.clip();
+    ctx.fillStyle = "#000";
+    ctx.fillRect(pane.x, pane.y, pane.w, pane.h);
+    var vw = video && video.videoWidth;
+    var vh = video && video.videoHeight;
+    if (video && vw && vh) {
+      var cx = pane.x + pane.w / 2;
+      var cy = pane.y + pane.h / 2;
+      ctx.translate(cx + (state.panX || 0), cy + (state.panY || 0));
+      ctx.scale(state.zoom || 1, state.zoom || 1);
+      ctx.translate(-cx, -cy);
+      var scale = Math.min(pane.w / vw, pane.h / vh);
+      var dw = vw * scale;
+      var dh = vh * scale;
+      var dx = pane.x + (pane.w - dw) / 2;
+      var dy = pane.y + (pane.h - dh) / 2;
+      try { ctx.drawImage(video, dx, dy, dw, dh); } catch (err) {}
+    }
+    ctx.restore();
+  }
+
+  function drawShotLabel(ctx, text, x, y, align, color, fontPx) {
+    ctx.save();
+    ctx.font = "700 " + fontPx + "px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    var label = String(text || "").toUpperCase();
+    var padX = Math.round(fontPx * 0.55);
+    var padY = Math.round(fontPx * 0.32);
+    var tw = ctx.measureText(label).width;
+    var bw = tw + padX * 2;
+    var bh = fontPx + padY * 2;
+    var bx = x;
+    if (align === "right") bx = x - bw;
+    else if (align === "center") bx = x - bw / 2;
+    ctx.fillStyle = "rgba(8,9,12,0.82)";
+    ctx.strokeStyle = "#262b35";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, y, bw, bh, 3);
+    else ctx.rect(bx, y, bw, bh);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fillText(label, bx + padX, y + padY);
+    ctx.restore();
+  }
+
+  function exportScreenshot() {
+    if (!canCaptureShot()) {
+      alert("Load a video first, then capture a screenshot.");
+      return;
+    }
+    var picRect = picture.getBoundingClientRect();
+    var w = picRect.width;
+    var h = picRect.height;
+    if (!w || !h) return;
+    var dpr = window.devicePixelRatio || 1;
+    if (dpr > 2) dpr = 2;
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(w * dpr));
+    canvas.height = Math.max(1, Math.round(h * dpr));
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+
+    var boxA = paneBoxCss(paneA, picRect);
+    var boxB = paneBoxCss(paneB, picRect);
+    var g = currentGroup();
+    var va = g && g.variants[state.keyA];
+    var vb = g && g.variants[state.keyB];
+    var compare = state.mode !== "single";
+
+    if (state.mode === "wipe") {
+      drawVideoInPane(ctx, videoB, { x: 0, y: 0, w: w, h: h });
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, w * (state.wipe / 100), h);
+      ctx.clip();
+      drawVideoInPane(ctx, videoA, { x: 0, y: 0, w: w, h: h });
+      ctx.restore();
+      var wx = w * (state.wipe / 100);
+      ctx.fillStyle = "#f2f4f8";
+      ctx.fillRect(wx - 1, 0, 2, h);
+    } else if (state.mode === "sbs") {
+      drawVideoInPane(ctx, videoA, boxA);
+      drawVideoInPane(ctx, videoB, boxB);
+      ctx.fillStyle = "#262b35";
+      ctx.fillRect(boxA.x + boxA.w, 0, Math.max(1, boxB.x - (boxA.x + boxA.w)), h);
+    } else {
+      drawVideoInPane(ctx, videoA, { x: 0, y: 0, w: w, h: h });
+    }
+
+    var fontPx = Math.max(24, Math.round(h * 0.032));
+    var margin = Math.max(12, Math.round(fontPx * 0.45));
+    var aText = "A · " + variantLabel(va);
+    drawShotLabel(ctx, aText, margin, margin, "left", "#6ea8fe", fontPx);
+    if (compare) {
+      var bText = "B · " + variantLabel(vb);
+      drawShotLabel(ctx, bText, w - margin, margin, "right", "#e8a838", fontPx);
+    }
+    var zoomPadY = Math.round(fontPx * 0.32);
+    var zoomBh = fontPx + zoomPadY * 2;
+    drawShotLabel(ctx, formatZoom(state.zoom), w / 2, h - margin - zoomBh, "center", "#d8dce4", fontPx);
+
+    var filename = screenshotFilename();
+    function fail() { alert("Could not capture this frame."); }
+    if (!canvas.toBlob) {
+      try {
+        var url = canvas.toDataURL("image/png");
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (err) { fail(); return; }
+      flashShotStatus(filename);
+      return;
+    }
+    canvas.toBlob(function (blob) {
+      if (!blob) { fail(); return; }
+      downloadBlob(blob, filename);
+      flashShotStatus(filename);
+    }, "image/png");
+  }
+
+  function flashShotStatus(filename) {
+    if (!saveStatus) return;
+    saveStatus.textContent = "Screenshot · " + filename;
+    saveStatus.className = "save-pill flash";
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () { updateSavePill(false); }, 1800);
+  }
+
   function persistInspectorFields() {
     var g = currentGroup();
     if (!g) return;
@@ -2128,23 +2325,23 @@
   }
 
   function stampBackupName() {
-    var d = new Date();
-    function pad(n) { return (n < 10 ? "0" : "") + n; }
-    return "videos-backup-" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-      "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + ".json";
+    return "videos-backup-" + stampNow() + ".json";
   }
 
-  function downloadJsonText(text, filename) {
-    var blob = new Blob([text], { type: "application/json" });
+  function downloadBlob(blob, filename) {
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = filename || "videos.json";
+    a.download = filename || "download";
     document.body.appendChild(a);
     a.click();
     setTimeout(function () {
       URL.revokeObjectURL(a.href);
       a.remove();
     }, 0);
+  }
+
+  function downloadJsonText(text, filename) {
+    downloadBlob(new Blob([text], { type: "application/json" }), filename || "videos.json");
   }
 
   function exportJson() {
@@ -2362,6 +2559,12 @@
       videoA.muted = state.muted;
       updateMuteBtn();
     });
+    $("btnShot").addEventListener("click", exportScreenshot);
+    if ($("btnShotHud")) $("btnShotHud").addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      exportScreenshot();
+    });
     $("btnFs").addEventListener("click", toggleFullscreen);
     function onFsChange() {
       var on = fsElement() === picture || fsElement() === stage;
@@ -2554,6 +2757,10 @@
         if (e.ctrlKey || e.metaKey) return;
         e.preventDefault();
         resetZoom();
+      } else if (e.key === "s" || e.key === "S") {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        e.preventDefault();
+        exportScreenshot();
       } else if (e.key === "Escape") {
         $("catModal").hidden = true;
       }
