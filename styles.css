@@ -481,6 +481,11 @@ input:disabled {
 .pane-c .pane-label { left: 8px; color: var(--slot-c); }
 .pane-d .pane-label { right: 8px; color: var(--slot-d); }
 
+.picture[data-mode="wipe"][data-wipe="h"] .pane-b .pane-label {
+  top: auto;
+  bottom: 8px;
+}
+
 .pane-missing {
   position: absolute;
   inset: 0;
@@ -556,6 +561,32 @@ input:disabled {
   cursor: ew-resize;
   background: transparent;
 }
+.picture[data-mode="wipe"][data-wipe="h"] .pane-a {
+  clip-path: inset(0 0 calc(100% - var(--wipe)) 0);
+}
+.picture[data-mode="wipe"][data-wipe="h"] .wipe-divider {
+  top: var(--wipe);
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: auto;
+  height: 14px;
+  transform: translateY(-50%);
+  cursor: ns-resize;
+}
+.picture[data-mode="wipe"][data-wipe="h"] .wipe-nub {
+  top: 50%;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 2px;
+  transform: translateY(-50%);
+}
+.picture[data-mode="wipe"][data-wipe="h"] .wipe-nub::after {
+  width: 28px;
+  height: 10px;
+}
 .wipe-nub {
   position: absolute;
   top: 0;
@@ -628,7 +659,8 @@ input:disabled {
 }
 
 .mode-tabs,
-.count-tabs {
+.count-tabs,
+.wipe-axis-tabs {
   display: flex;
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -757,6 +789,7 @@ input:disabled {
 .picture[data-mode="single"] ~ .deck #slotPickC,
 .picture[data-mode="single"] ~ .deck #slotPickD,
 .picture[data-mode="single"] ~ .deck #countTabs,
+.picture:not([data-mode="wipe"]) ~ .deck #wipeAxisTabs,
 .picture:not([data-compare="4"]) ~ .deck #slotPickC,
 .picture:not([data-compare="4"]) ~ .deck #slotPickD,
 .picture[data-mode="wipe"] ~ .deck #slotPickC,
@@ -886,6 +919,13 @@ input:disabled {
 .picture:-webkit-full-screen .zoom-hud[hidden],
 .picture.is-fs .zoom-hud[hidden] {
   display: none !important;
+}
+
+.picture[data-mode="wipe"][data-wipe="h"]:fullscreen .zoom-hud,
+.picture[data-mode="wipe"][data-wipe="h"]:-webkit-full-screen .zoom-hud,
+.picture[data-mode="wipe"][data-wipe="h"].is-fs .zoom-hud {
+  right: auto;
+  left: 8px;
 }
 
 .zoom-hud .icon-btn {

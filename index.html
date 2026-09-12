@@ -41,7 +41,7 @@
       </aside>
 
       <section class="stage" id="stage">
-        <div class="picture" id="picture" data-mode="single" data-compare="2">
+        <div class="picture" id="picture" data-mode="single" data-compare="2" data-wipe="v">
           <div class="pane pane-a" id="paneA">
             <video id="videoA" playsinline preload="auto" tabindex="-1" controlslist="nofullscreen nodownload noremoteplayback" disablepictureinpicture></video>
             <div class="pane-missing" id="missingA" hidden>Not on disk — load folder</div>
@@ -86,6 +86,10 @@
           <div class="count-tabs" id="countTabs" role="group" aria-label="How many to compare">
             <button type="button" class="tab is-on" data-count="2" aria-label="Compare 2">2</button>
             <button type="button" class="tab" data-count="4" aria-label="Compare 4">4</button>
+          </div>
+          <div class="wipe-axis-tabs" id="wipeAxisTabs" role="group" aria-label="Wipe direction">
+            <button type="button" class="tab is-on" data-axis="v" title="Vertical wipe" aria-label="Vertical wipe">V</button>
+            <button type="button" class="tab" data-axis="h" title="Horizontal wipe" aria-label="Horizontal wipe">H</button>
           </div>
           <div class="fps-row" id="fpsRow">
             <span class="fps-lab">FPS</span>

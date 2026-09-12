@@ -94,6 +94,7 @@
     keyD: null,
     rate: 1,
     wipe: 50,
+    wipeAxis: "v",
     muted: false,
     hasFolder: false,
     draggingId: null,
@@ -114,6 +115,7 @@
   var lastPick = {
     mode: "single",
     compareCount: 2,
+    wipeAxis: "v",
     fps: null,
     resA: null,
     techA: null,
@@ -1172,6 +1174,7 @@
   function clearLastPick() {
     lastPick.mode = "single";
     lastPick.compareCount = 2;
+    lastPick.wipeAxis = "v";
     lastPick.fps = null;
     lastPick.resA = null;
     lastPick.techA = null;
@@ -1549,6 +1552,23 @@
     picture.style.setProperty("--wipe", state.wipe + "%");
   }
 
+  function setWipeAxis(axis) {
+    state.wipeAxis = axis === "h" ? "h" : "v";
+    lastPick.wipeAxis = state.wipeAxis;
+    if (picture) picture.setAttribute("data-wipe", state.wipeAxis);
+    renderWipeAxisTabs();
+  }
+
+  function renderWipeAxisTabs() {
+    var wrap = $("wipeAxisTabs");
+    if (wrap) wrap.style.display = state.mode === "wipe" ? "" : "none";
+    var tabs = document.querySelectorAll("#wipeAxisTabs .tab");
+    var i;
+    for (i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle("is-on", tabs[i].getAttribute("data-axis") === state.wipeAxis);
+    }
+  }
+
   function formatZoom(z) {
     if (!Number.isFinite(z) || z <= 1.001) return "1×";
     if (Math.abs(z - Math.round(z)) < 0.05) return Math.round(z) + "×";
@@ -1681,6 +1701,7 @@
     if (picture) {
       picture.setAttribute("data-mode", state.mode);
       picture.setAttribute("data-compare", quad ? "4" : "2");
+      picture.setAttribute("data-wipe", state.wipeAxis === "h" ? "h" : "v");
     }
   }
 
@@ -1804,6 +1825,7 @@
       } else {
         if (lastPick.mode === "wipe" || lastPick.mode === "sbs") state.mode = lastPick.mode;
         state.compareCount = lastPick.compareCount === 4 ? 4 : 2;
+        state.wipeAxis = lastPick.wipeAxis === "h" ? "h" : "v";
       }
       rememberPick();
     } else {
@@ -1916,6 +1938,7 @@
     }
     var swap = $("btnSwap");
     if (swap) swap.disabled = !state.keyB;
+    renderWipeAxisTabs();
     applyPaneVisibility();
   }
 
@@ -2359,13 +2382,19 @@
       drawVideoInPane(ctx, videoB, { x: 0, y: 0, w: w, h: h });
       ctx.save();
       ctx.beginPath();
-      ctx.rect(0, 0, w * (state.wipe / 100), h);
+      if (state.wipeAxis === "h") ctx.rect(0, 0, w, h * (state.wipe / 100));
+      else ctx.rect(0, 0, w * (state.wipe / 100), h);
       ctx.clip();
       drawVideoInPane(ctx, videoA, { x: 0, y: 0, w: w, h: h });
       ctx.restore();
-      var wx = w * (state.wipe / 100);
       ctx.fillStyle = "#f2f4f8";
-      ctx.fillRect(wx - 1, 0, 2, h);
+      if (state.wipeAxis === "h") {
+        var hy = h * (state.wipe / 100);
+        ctx.fillRect(0, hy - 1, w, 2);
+      } else {
+        var wx = w * (state.wipe / 100);
+        ctx.fillRect(wx - 1, 0, 2, h);
+      }
     } else if (quad) {
       drawVideoInPane(ctx, videoA, boxA);
       drawVideoInPane(ctx, videoB, boxB);
@@ -2382,6 +2411,8 @@
 
     var fontPx = Math.max(24, Math.round(h * 0.032));
     var margin = Math.max(12, Math.round(fontPx * 0.45));
+    var zoomPadY = Math.round(fontPx * 0.32);
+    var zoomBh = fontPx + zoomPadY * 2;
     if (quad) {
       drawShotLabel(ctx, "A · " + variantLabel(va), boxA.x + margin, boxA.y + margin, "left", "#6ea8fe", fontPx);
       drawShotLabel(ctx, "B · " + variantLabel(vb), boxB.x + boxB.w - margin, boxB.y + margin, "right", "#e8a838", fontPx);
@@ -2390,11 +2421,13 @@
     } else {
       drawShotLabel(ctx, "A · " + variantLabel(va), margin, margin, "left", "#6ea8fe", fontPx);
       if (compare) {
-        drawShotLabel(ctx, "B · " + variantLabel(vb), w - margin, margin, "right", "#e8a838", fontPx);
+        if (state.mode === "wipe" && state.wipeAxis === "h") {
+          drawShotLabel(ctx, "B · " + variantLabel(vb), w - margin, h - margin - zoomBh, "right", "#e8a838", fontPx);
+        } else {
+          drawShotLabel(ctx, "B · " + variantLabel(vb), w - margin, margin, "right", "#e8a838", fontPx);
+        }
       }
     }
-    var zoomPadY = Math.round(fontPx * 0.32);
-    var zoomBh = fontPx + zoomPadY * 2;
     drawShotLabel(ctx, formatZoom(state.zoom), w / 2, h - margin - zoomBh, "center", "#d8dce4", fontPx);
 
     var filename = screenshotFilename();
@@ -2608,6 +2641,7 @@
     state.rate = 1;
     state.muted = false;
     state.wipe = 50;
+    state.wipeAxis = "v";
     clearLastPick();
     resetZoom();
     var search = $("search");
@@ -2761,6 +2795,11 @@
       if (!tab || tab.disabled) return;
       setCompareCount(Number(tab.getAttribute("data-count")));
     });
+    $("wipeAxisTabs").addEventListener("click", function (e) {
+      var tab = e.target.closest(".tab");
+      if (!tab || tab.disabled) return;
+      setWipeAxis(tab.getAttribute("data-axis"));
+    });
 
     $("fpsChips").addEventListener("click", function (e) {
       var chip = e.target.closest("[data-fps]");
@@ -2897,8 +2936,13 @@
     wipeDivider.addEventListener("pointermove", function (e) {
       if (!state.wiping) return;
       var rect = picture.getBoundingClientRect();
-      if (!rect.width) return;
-      setWipe(((e.clientX - rect.left) / rect.width) * 100);
+      if (state.wipeAxis === "h") {
+        if (!rect.height) return;
+        setWipe(((e.clientY - rect.top) / rect.height) * 100);
+      } else {
+        if (!rect.width) return;
+        setWipe(((e.clientX - rect.left) / rect.width) * 100);
+      }
     });
     function endWipe(e) {
       state.wiping = false;
