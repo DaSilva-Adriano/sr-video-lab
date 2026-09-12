@@ -102,3 +102,9 @@ Add / edit / delete categories in the **Categories** modal. The **id** is the sh
 ## Why Import JSON on `file://`
 
 Chrome blocks `fetch('./videos.json')` from `file://` (CORS). The same sample is therefore embedded in `app.js` as `DEFAULT_DB`. If you open the page over http, `videos.json` is fetched when possible. Edits live in `localStorage`; after a refresh they win over the sample. To share or back up the database — or to pick up a `videos.json` you edited by hand — use **Import JSON**.
+
+## License
+
+SR Video Lab is free software under the [GNU General Public License v3.0](LICENSE).
+You can redistribute it and/or modify it under the terms of that license.
+See [LICENSE](LICENSE) for the full text.
