@@ -41,7 +41,7 @@
       </aside>
 
       <section class="stage" id="stage">
-        <div class="picture" id="picture" data-mode="single">
+        <div class="picture" id="picture" data-mode="single" data-compare="2">
           <div class="pane pane-a" id="paneA">
             <video id="videoA" playsinline preload="auto" tabindex="-1" controlslist="nofullscreen nodownload noremoteplayback" disablepictureinpicture></video>
             <div class="pane-missing" id="missingA" hidden>Not on disk — load folder</div>
@@ -54,6 +54,16 @@
             <video id="videoB" playsinline preload="auto" muted tabindex="-1" controlslist="nofullscreen nodownload noremoteplayback" disablepictureinpicture></video>
             <div class="pane-missing" id="missingB" hidden>Not on disk — load folder</div>
             <span class="pane-label" id="labelB"></span>
+          </div>
+          <div class="pane pane-c" id="paneC" hidden>
+            <video id="videoC" playsinline preload="auto" muted tabindex="-1" controlslist="nofullscreen nodownload noremoteplayback" disablepictureinpicture></video>
+            <div class="pane-missing" id="missingC" hidden>Not on disk — load folder</div>
+            <span class="pane-label" id="labelC"></span>
+          </div>
+          <div class="pane pane-d" id="paneD" hidden>
+            <video id="videoD" playsinline preload="auto" muted tabindex="-1" controlslist="nofullscreen nodownload noremoteplayback" disablepictureinpicture></video>
+            <div class="pane-missing" id="missingD" hidden>Not on disk — load folder</div>
+            <span class="pane-label" id="labelD"></span>
           </div>
           <div class="placeholder" id="placeholder">
             <p class="ph-kicker">No clip selected</p>
@@ -73,11 +83,15 @@
             <button type="button" class="tab" data-mode="wipe" aria-label="Wipe compare">Wipe</button>
             <button type="button" class="tab" data-mode="sbs" aria-label="Side by side">Side by side</button>
           </div>
+          <div class="count-tabs" id="countTabs" role="group" aria-label="How many to compare">
+            <button type="button" class="tab is-on" data-count="2" aria-label="Compare 2">2</button>
+            <button type="button" class="tab" data-count="4" aria-label="Compare 4">4</button>
+          </div>
           <div class="fps-row" id="fpsRow">
             <span class="fps-lab">FPS</span>
             <div class="fps-chips" id="fpsChips" role="listbox" aria-label="Frame rate"></div>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm" id="btnSwap" title="Reverse A and B" aria-label="Reverse A and B">Reverse</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btnSwap" title="Reverse A and B (and C and D when comparing 4)" aria-label="Reverse A and B">Reverse</button>
           <div class="slot-pickers" id="slotPickers">
             <div class="slot-pick slot-pick-a" data-slot="A">
               <span class="slot-lab">A</span>
@@ -99,6 +113,28 @@
               <div class="chip-col">
                 <span class="chip-lab">Type</span>
                 <div class="tech-chips" id="techChipsB" role="listbox" aria-label="Upscaler B"></div>
+              </div>
+            </div>
+            <div class="slot-pick slot-pick-c" id="slotPickC" data-slot="C">
+              <span class="slot-lab">C</span>
+              <div class="chip-col">
+                <span class="chip-lab">Res</span>
+                <div class="res-chips" id="resChipsC" role="listbox" aria-label="Resolution C"></div>
+              </div>
+              <div class="chip-col">
+                <span class="chip-lab">Type</span>
+                <div class="tech-chips" id="techChipsC" role="listbox" aria-label="Upscaler C"></div>
+              </div>
+            </div>
+            <div class="slot-pick slot-pick-d" id="slotPickD" data-slot="D">
+              <span class="slot-lab">D</span>
+              <div class="chip-col">
+                <span class="chip-lab">Res</span>
+                <div class="res-chips" id="resChipsD" role="listbox" aria-label="Resolution D"></div>
+              </div>
+              <div class="chip-col">
+                <span class="chip-lab">Type</span>
+                <div class="tech-chips" id="techChipsD" role="listbox" aria-label="Upscaler D"></div>
               </div>
             </div>
           </div>

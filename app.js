@@ -69,7 +69,8 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
-  var videoA, videoB, paneA, paneB, missingA, missingB, labelA, labelB;
+  var videoA, videoB, videoC, videoD, paneA, paneB, paneC, paneD;
+  var missingA, missingB, missingC, missingD, labelA, labelB, labelC, labelD;
   var picture, stage, placeholder, placeholderBody, wipeDivider;
   var seek, timeLabel, btnPlay, btnMute, saveStatus;
   var libraryList, catChips, dropOverlay;
@@ -86,8 +87,11 @@
     catFilter: "all",
     search: "",
     mode: "single",
+    compareCount: 2,
     keyA: null,
     keyB: null,
+    keyC: null,
+    keyD: null,
     rate: 1,
     wipe: 50,
     muted: false,
@@ -109,12 +113,48 @@
   var panDrag = { on: false, pointerId: 0, sx: 0, sy: 0, ox: 0, oy: 0 };
   var lastPick = {
     mode: "single",
+    compareCount: 2,
     fps: null,
     resA: null,
     techA: null,
     resB: null,
-    techB: null
+    techB: null,
+    resC: null,
+    techC: null,
+    resD: null,
+    techD: null
   };
+
+  function isCompare() {
+    return state.mode !== "single";
+  }
+
+  function isQuad() {
+    return isCompare() && state.mode !== "wipe" && state.compareCount === 4;
+  }
+
+  function forEachCompareVideo(fn) {
+    if (!isCompare()) return;
+    if (videoB) fn(videoB);
+    if (isQuad()) {
+      if (videoC) fn(videoC);
+      if (videoD) fn(videoD);
+    }
+  }
+
+  function keyForSlot(slot) {
+    if (slot === "B") return state.keyB;
+    if (slot === "C") return state.keyC;
+    if (slot === "D") return state.keyD;
+    return state.keyA;
+  }
+
+  function setKeyForSlot(slot, key) {
+    if (slot === "B") state.keyB = key;
+    else if (slot === "C") state.keyC = key;
+    else if (slot === "D") state.keyD = key;
+    else state.keyA = key;
+  }
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -1088,6 +1128,39 @@
     return { a: a, b: b };
   }
 
+  function unusedVariantKey(group, used, preferUpscale) {
+    var keys = sortVariantKeys(group);
+    var pool = [];
+    var i, k, v;
+    for (i = 0; i < keys.length; i++) {
+      k = keys[i];
+      if (used[k]) continue;
+      v = group.variants[k];
+      if (!v) continue;
+      pool.push(k);
+    }
+    if (!pool.length) return keys[0] || null;
+    pool.sort(function (a, b) {
+      var va = group.variants[a] || {};
+      var vb = group.variants[b] || {};
+      var ua = va.tech ? 1 : 0;
+      var ub = vb.tech ? 1 : 0;
+      if (preferUpscale) return (ub - ua) || (rankRes(vb.resolution) - rankRes(va.resolution));
+      return (ua - ub) || (rankRes(vb.resolution) - rankRes(va.resolution));
+    });
+    return pool[0];
+  }
+
+  function pickDefaultCD(group, keyA, keyB) {
+    var used = {};
+    if (keyA) used[keyA] = true;
+    if (keyB) used[keyB] = true;
+    var c = unusedVariantKey(group, used, false);
+    if (c) used[c] = true;
+    var d = unusedVariantKey(group, used, true);
+    return { c: c, d: d };
+  }
+
   function variantCount(g) {
     return Object.keys((g && g.variants) || {}).length;
   }
@@ -1098,27 +1171,38 @@
 
   function clearLastPick() {
     lastPick.mode = "single";
+    lastPick.compareCount = 2;
     lastPick.fps = null;
     lastPick.resA = null;
     lastPick.techA = null;
     lastPick.resB = null;
     lastPick.techB = null;
+    lastPick.resC = null;
+    lastPick.techC = null;
+    lastPick.resD = null;
+    lastPick.techD = null;
+  }
+
+  function rememberSlot(key, resField, techField) {
+    var g = currentGroup();
+    var v = g && g.variants[key];
+    if (!v) return;
+    lastPick[resField] = v.resolution || "";
+    lastPick[techField] = v.tech || "";
   }
 
   function rememberPick() {
     var g = currentGroup();
     if (!g) return;
     var va = g.variants[state.keyA];
-    var vb = g.variants[state.keyB];
     if (va) {
       lastPick.fps = normFps(va);
       lastPick.resA = va.resolution || "";
       lastPick.techA = va.tech || "";
     }
-    if (vb) {
-      lastPick.resB = vb.resolution || "";
-      lastPick.techB = vb.tech || "";
-    }
+    rememberSlot(state.keyB, "resB", "techB");
+    rememberSlot(state.keyC, "resC", "techC");
+    rememberSlot(state.keyD, "resD", "techD");
   }
 
   function groupResList(group, fps) {
@@ -1287,68 +1371,92 @@
     return true;
   }
 
+  function unloadVideo(video, missingEl) {
+    if (!video) return;
+    try { video.pause(); } catch (err) {}
+    video.removeAttribute("src");
+    try { video.load(); } catch (err) {}
+    if (missingEl) missingEl.hidden = true;
+  }
+
+  function muteFollower(video) {
+    if (!video) return;
+    video.muted = true;
+    video.defaultMuted = true;
+  }
+
   function applySources(keepTime) {
     var g = currentGroup();
     var restore = keepTime ? restoreState() : { time: 0, rate: state.rate, paused: true };
     restore.rate = state.rate;
     videoA.muted = state.muted;
-    videoB.muted = true;
-    videoB.defaultMuted = true;
+    muteFollower(videoB);
+    muteFollower(videoC);
+    muteFollower(videoD);
     if (!g) {
-      videoA.removeAttribute("src");
-      videoB.removeAttribute("src");
-      try { videoA.load(); videoB.load(); } catch (err) {}
-      missingA.hidden = true;
-      missingB.hidden = true;
+      unloadVideo(videoA, missingA);
+      unloadVideo(videoB, missingB);
+      unloadVideo(videoC, missingC);
+      unloadVideo(videoD, missingD);
       updatePlayBtn();
       return;
     }
-    var va = g.variants[state.keyA];
-    var vb = g.variants[state.keyB];
-    var okA = loadVariant(videoA, va, restore);
-    missingA.hidden = okA;
-    if (state.mode === "single") {
-      missingB.hidden = true;
-      videoB.removeAttribute("src");
-      try { videoB.load(); } catch (err) {}
+    missingA.hidden = loadVariant(videoA, g.variants[state.keyA], restore);
+    if (!isCompare()) {
+      unloadVideo(videoB, missingB);
+      unloadVideo(videoC, missingC);
+      unloadVideo(videoD, missingD);
     } else {
-      var okB = loadVariant(videoB, vb, restore);
-      missingB.hidden = okB;
+      missingB.hidden = loadVariant(videoB, g.variants[state.keyB], restore);
+      if (isQuad()) {
+        missingC.hidden = loadVariant(videoC, g.variants[state.keyC], restore);
+        missingD.hidden = loadVariant(videoD, g.variants[state.keyD], restore);
+      } else {
+        unloadVideo(videoC, missingC);
+        unloadVideo(videoD, missingD);
+      }
     }
     updatePlayBtn();
     updateTransport();
     updateZoomUi();
   }
 
+  function syncOne(video, t, force) {
+    if (!video || !video.getAttribute("src") || video.readyState < 1) return;
+    if (force || Math.abs((video.currentTime || 0) - t) > DRIFT) {
+      try { video.currentTime = t; } catch (err) {}
+    }
+    if (video.playbackRate !== videoA.playbackRate) {
+      try { video.playbackRate = videoA.playbackRate; } catch (err) {}
+    }
+  }
+
   function syncVideos(force) {
-    if (state.mode === "single") return;
-    if (!videoB.getAttribute("src")) return;
-    if (videoB.readyState < 1) return;
+    if (!isCompare()) return;
     if (syncing && !force) return;
-    var a = videoA.currentTime || 0;
-    if (force || Math.abs((videoB.currentTime || 0) - a) > DRIFT) {
-      syncing = true;
-      try { videoB.currentTime = a; } catch (err) {}
-      setTimeout(function () { syncing = false; }, 80);
-    }
-    if (videoB.playbackRate !== videoA.playbackRate) {
-      try { videoB.playbackRate = videoA.playbackRate; } catch (err) {}
-    }
+    syncing = true;
+    var t = videoA.currentTime || 0;
+    forEachCompareVideo(function (v) { syncOne(v, t, force); });
+    setTimeout(function () { syncing = false; }, 80);
   }
 
   function playBoth() {
     var p = videoA.play();
     if (p && p.catch) p.catch(function () {});
-    if (state.mode !== "single" && videoB.getAttribute("src")) {
-      var q = videoB.play();
+    forEachCompareVideo(function (v) {
+      var q = v.play();
       if (q && q.catch) q.catch(function () {});
-    }
+    });
     updatePlayBtn();
   }
 
   function pauseBoth() {
     try { videoA.pause(); } catch (err) {}
-    try { videoB.pause(); } catch (err) {}
+    forEachCompareVideo(function (v) {
+      try { v.pause(); } catch (err) {}
+    });
+    if (videoC) try { videoC.pause(); } catch (err) {}
+    if (videoD) try { videoD.pause(); } catch (err) {}
     updatePlayBtn();
   }
 
@@ -1372,9 +1480,9 @@
     if (Number.isFinite(dur)) t = Math.max(0, Math.min(dur, t));
     else t = Math.max(0, t);
     try { videoA.currentTime = t; } catch (err) {}
-    if (state.mode !== "single") {
-      try { videoB.currentTime = t; } catch (err) {}
-    }
+    forEachCompareVideo(function (v) {
+      try { v.currentTime = t; } catch (err) {}
+    });
     updateTransport();
   }
 
@@ -1384,16 +1492,19 @@
     if (Number.isFinite(dur)) t = Math.max(0, Math.min(dur, t));
     else t = Math.max(0, t);
     try { videoA.currentTime = t; } catch (err) {}
-    if (state.mode !== "single") {
-      try { videoB.currentTime = t; } catch (err) {}
-    }
+    forEachCompareVideo(function (v) {
+      try { v.currentTime = t; } catch (err) {}
+    });
     updateTransport();
   }
 
   function setRate(r) {
     state.rate = r;
     try { videoA.playbackRate = r; } catch (err) {}
-    try { videoB.playbackRate = r; } catch (err) {}
+    [videoB, videoC, videoD].forEach(function (v) {
+      if (!v) return;
+      try { v.playbackRate = r; } catch (err) {}
+    });
     renderSpeeds();
   }
 
@@ -1449,10 +1560,17 @@
   }
 
   function zoomRectForPoint(clientX, clientY) {
-    if (state.mode === "sbs" && paneA && paneB) {
-      var rb = paneB.getBoundingClientRect();
-      if (clientX >= rb.left) return rb;
-      return paneA.getBoundingClientRect();
+    var panes = isQuad()
+      ? [paneA, paneB, paneC, paneD]
+      : (state.mode === "sbs" ? [paneA, paneB] : null);
+    if (panes) {
+      var i, r;
+      for (i = 0; i < panes.length; i++) {
+        if (!panes[i]) continue;
+        r = panes[i].getBoundingClientRect();
+        if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) return r;
+      }
+      return paneA ? paneA.getBoundingClientRect() : picture.getBoundingClientRect();
     }
     return picture.getBoundingClientRect();
   }
@@ -1464,7 +1582,7 @@
       state.panY = 0;
       return;
     }
-    var rect = (state.mode === "sbs" && paneA ? paneA : picture).getBoundingClientRect();
+    var rect = ((isQuad() || state.mode === "sbs") && paneA ? paneA : picture).getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     var maxX = (rect.width * (state.zoom - 1)) / 2;
     var maxY = (rect.height * (state.zoom - 1)) / 2;
@@ -1479,6 +1597,8 @@
       : "translate(" + state.panX + "px, " + state.panY + "px) scale(" + state.zoom + ")";
     if (videoA) videoA.style.transform = t;
     if (videoB) videoB.style.transform = t;
+    if (videoC) videoC.style.transform = t;
+    if (videoD) videoD.style.transform = t;
     if (picture) {
       picture.classList.toggle("is-zoomed", state.zoom > 1.001);
       if (state.zoom <= 1.001) picture.classList.remove("is-panning");
@@ -1540,7 +1660,7 @@
 
   function zoomBy(factor) {
     if (!picture) return;
-    var rect = (state.mode === "sbs" && paneA ? paneA : picture).getBoundingClientRect();
+    var rect = ((isQuad() || state.mode === "sbs") && paneA ? paneA : picture).getBoundingClientRect();
     zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
   }
 
@@ -1551,26 +1671,67 @@
     applyZoom();
   }
 
+  function applyPaneVisibility() {
+    var compare = isCompare();
+    var quad = isQuad();
+    if (paneB) paneB.hidden = !compare;
+    if (paneC) paneC.hidden = !quad;
+    if (paneD) paneD.hidden = !quad;
+    if (wipeDivider) wipeDivider.hidden = state.mode !== "wipe";
+    if (picture) {
+      picture.setAttribute("data-mode", state.mode);
+      picture.setAttribute("data-compare", quad ? "4" : "2");
+    }
+  }
+
   function setMode(mode) {
     var g = currentGroup();
     var n = g ? variantCount(g) : 0;
     if ((mode === "wipe" || mode === "sbs") && n < 2) mode = "single";
     state.mode = mode;
-    picture.setAttribute("data-mode", mode);
-    paneB.hidden = mode === "single";
-    wipeDivider.hidden = mode !== "wipe";
-    var tabs = document.querySelectorAll(".tab");
+    if (mode === "sbs" && state.compareCount === 4) ensureCDKeys(g);
+    applyPaneVisibility();
+    var tabs = document.querySelectorAll("#modeTabs .tab");
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].classList.toggle("is-on", tabs[i].getAttribute("data-mode") === mode);
     }
-    var bWrap = $("slotPickB");
-    if (bWrap) bWrap.style.display = mode === "single" ? "none" : "";
     lastPick.mode = state.mode;
     rememberPick();
     applySources(true);
     applyZoom();
     renderFpsChips();
     renderSlotPickers();
+  }
+
+  function setCompareCount(n) {
+    n = n === 4 ? 4 : 2;
+    var g = currentGroup();
+    if (n === 4 && (!g || variantCount(g) < 2)) n = 2;
+    state.compareCount = n;
+    lastPick.compareCount = n;
+    if (n === 4) {
+      ensureCDKeys(g);
+      if (state.mode === "single" || state.mode === "wipe") {
+        setMode("sbs");
+        return;
+      }
+    }
+    applyPaneVisibility();
+    applySources(true);
+    applyZoom();
+    renderAll();
+  }
+
+  function ensureCDKeys(g) {
+    if (!g) return;
+    var fps = pickFpsForGroup(g, lastPick.fps);
+    var cd = pickDefaultCD(g, state.keyA, state.keyB);
+    if (!state.keyC || !g.variants[state.keyC]) {
+      state.keyC = matchSlot(g, lastPick.resC, lastPick.techC, fps, cd.c);
+    }
+    if (!state.keyD || !g.variants[state.keyD]) {
+      state.keyD = matchSlot(g, lastPick.resD, lastPick.techD, fps, cd.d);
+    }
   }
 
     function fsElement() {
@@ -1634,12 +1795,22 @@
         state.keyA = ab.a;
         state.keyB = ab.b;
       }
-      if (variantCount(g) < 2) state.mode = "single";
-      else if (lastPick.mode === "wipe" || lastPick.mode === "sbs") state.mode = lastPick.mode;
+      var cd = pickDefaultCD(g, state.keyA, state.keyB);
+      state.keyC = matchSlot(g, lastPick.resC, lastPick.techC, fps, cd.c);
+      state.keyD = matchSlot(g, lastPick.resD, lastPick.techD, fps, cd.d);
+      if (variantCount(g) < 2) {
+        state.mode = "single";
+        state.compareCount = 2;
+      } else {
+        if (lastPick.mode === "wipe" || lastPick.mode === "sbs") state.mode = lastPick.mode;
+        state.compareCount = lastPick.compareCount === 4 ? 4 : 2;
+      }
       rememberPick();
     } else {
       state.keyA = null;
       state.keyB = null;
+      state.keyC = null;
+      state.keyD = null;
     }
     applySources(false);
     renderAll();
@@ -1727,17 +1898,25 @@
   function renderCompareTabs() {
     var g = currentGroup();
     var n = g ? variantCount(g) : 0;
-    var tabs = document.querySelectorAll(".tab");
+    var tabs = document.querySelectorAll("#modeTabs .tab");
     var i;
     for (i = 0; i < tabs.length; i++) {
       var m = tabs[i].getAttribute("data-mode");
       tabs[i].disabled = (m === "wipe" || m === "sbs") && n < 2;
       tabs[i].classList.toggle("is-on", m === state.mode);
     }
-    var bWrap = $("slotPickB");
-    if (bWrap) bWrap.style.display = state.mode === "single" ? "none" : "";
+    var countWrap = $("countTabs");
+    if (countWrap) countWrap.style.display = state.mode === "single" ? "none" : "";
+    var countTabs = document.querySelectorAll("#countTabs .tab");
+    var quadOn = isQuad();
+    for (i = 0; i < countTabs.length; i++) {
+      var c = Number(countTabs[i].getAttribute("data-count"));
+      countTabs[i].classList.toggle("is-on", (c === 4) === quadOn);
+      countTabs[i].disabled = c === 4 && n < 2;
+    }
     var swap = $("btnSwap");
     if (swap) swap.disabled = !state.keyB;
+    applyPaneVisibility();
   }
 
   function currentFps() {
@@ -1787,16 +1966,20 @@
     var g = currentGroup();
     if (!g) return;
     if (Math.abs(currentFps() - fps) < 0.05 &&
-        !(state.mode !== "single" && state.keyB && Math.abs(normFps(g.variants[state.keyB]) - fps) > 0.05)) {
+        !(isCompare() && state.keyB && Math.abs(normFps(g.variants[state.keyB]) - fps) > 0.05)) {
       renderFpsChips();
       return;
     }
     var a = findVariantAtFps(g, state.keyA, fps);
     if (a) state.keyA = a;
-    if (state.mode !== "single" && state.keyB) {
-      var b = findVariantAtFps(g, state.keyB, fps);
-      if (b) state.keyB = b;
-    }
+    ["B", "C", "D"].forEach(function (slot) {
+      var cur = keyForSlot(slot);
+      if (!cur) return;
+      if (slot !== "B" && !isQuad()) return;
+      if (slot === "B" && !isCompare()) return;
+      var next = findVariantAtFps(g, cur, fps);
+      if (next) setKeyForSlot(slot, next);
+    });
     applySources(true);
     rememberPick();
     renderAll();
@@ -1817,7 +2000,10 @@
 
   function renderChipRow(el, items, selected, kind, slotMark) {
     if (!el) return;
-    var onCls = slotMark === "B" ? " is-b" : " is-a";
+    var onCls = " is-a";
+    if (slotMark === "B") onCls = " is-b";
+    else if (slotMark === "C") onCls = " is-c";
+    else if (slotMark === "D") onCls = " is-d";
     el.innerHTML = items.map(function (item) {
       var value = item.value;
       var lab = item.label;
@@ -1832,28 +2018,16 @@
     var g = currentGroup();
     renderCompareTabs();
     if (!g) {
-      renderChipRow($("resChipsA"), [], "", "res", "A");
-      renderChipRow($("techChipsA"), [], "", "tech", "A");
-      renderChipRow($("resChipsB"), [], "", "res", "B");
-      renderChipRow($("techChipsB"), [], "", "tech", "B");
+      ["A", "B", "C", "D"].forEach(function (slot) {
+        renderChipRow($("resChips" + slot), [], "", "res", slot);
+        renderChipRow($("techChips" + slot), [], "", "tech", slot);
+      });
       return;
     }
     var fps = currentFps();
-    var va = g.variants[state.keyA] || {};
-    var vb = g.variants[state.keyB] || {};
-    var resA = va.resolution || "";
-    var resB = vb.resolution || "";
-    var techA = va.tech || "";
-    var techB = vb.tech || "";
     var resItems = groupResList(g, fps).map(function (r) {
       return { value: r, label: r, up: false };
     });
-    if (resA && !resItems.some(function (it) { return it.value === resA; })) {
-      resItems.push({ value: resA, label: resA, up: false });
-    }
-    if (resB && !resItems.some(function (it) { return it.value === resB; })) {
-      resItems.push({ value: resB, label: resB, up: false });
-    }
     function techItems(res, current) {
       var list = groupTechList(g, fps, res).map(function (t) {
         return { value: t, label: techLabel(t), up: !!t };
@@ -1863,10 +2037,17 @@
       }
       return list;
     }
-    renderChipRow($("resChipsA"), resItems, resA, "res", "A");
-    renderChipRow($("techChipsA"), techItems(resA, techA), techA, "tech", "A");
-    renderChipRow($("resChipsB"), resItems, resB, "res", "B");
-    renderChipRow($("techChipsB"), techItems(resB, techB), techB, "tech", "B");
+    ["A", "B", "C", "D"].forEach(function (slot) {
+      var v = g.variants[keyForSlot(slot)] || {};
+      var res = v.resolution || "";
+      var tech = v.tech || "";
+      var items = resItems.slice();
+      if (res && !items.some(function (it) { return it.value === res; })) {
+        items.push({ value: res, label: res, up: false });
+      }
+      renderChipRow($("resChips" + slot), items, res, "res", slot);
+      renderChipRow($("techChips" + slot), techItems(res, tech), tech, "tech", slot);
+    });
   }
 
   function renderSpeeds() {
@@ -1910,7 +2091,10 @@
     list.innerHTML = keys.map(function (k) {
       var v = g.variants[k];
       var on = variantOnDisk(v);
-      var cls = "var-row" + (k === state.keyA ? " is-a" : "") + (state.mode !== "single" && k === state.keyB ? " is-b" : "");
+      var cls = "var-row" + (k === state.keyA ? " is-a" : "") +
+        (isCompare() && k === state.keyB ? " is-b" : "") +
+        (isQuad() && k === state.keyC ? " is-c" : "") +
+        (isQuad() && k === state.keyD ? " is-d" : "");
       var tech = v.tech ? esc(v.tech) : "original";
       var techCls = v.tech ? "up" : "orig";
       return '<li><div class="' + cls + '" data-key="' + esc(k) + '" role="button" tabindex="0">' +
@@ -1924,6 +2108,8 @@
         '<span class="slot-btns">' +
         '<button type="button" data-set="A" data-key="' + esc(k) + '" class="' + (k === state.keyA ? "is-on" : "") + '">A</button>' +
         '<button type="button" data-set="B" data-key="' + esc(k) + '" class="' + (k === state.keyB ? "is-on" : "") + '">B</button>' +
+        '<button type="button" data-set="C" data-key="' + esc(k) + '" class="' + (k === state.keyC ? "is-on" : "") + '">C</button>' +
+        '<button type="button" data-set="D" data-key="' + esc(k) + '" class="' + (k === state.keyD ? "is-on" : "") + '">D</button>' +
         "</span></div></div></li>";
     }).join("");
   }
@@ -1953,39 +2139,53 @@
     updatePlaceholder();
     updateMuteBtn();
     updatePlayBtn();
-    labelA.textContent = "A · " + variantLabel(currentGroup() && currentGroup().variants[state.keyA]);
-    labelB.textContent = "B · " + variantLabel(currentGroup() && currentGroup().variants[state.keyB]);
+    var gNow = currentGroup();
+    if (labelA) labelA.textContent = "A · " + variantLabel(gNow && gNow.variants[state.keyA]);
+    if (labelB) labelB.textContent = "B · " + variantLabel(gNow && gNow.variants[state.keyB]);
+    if (labelC) labelC.textContent = "C · " + variantLabel(gNow && gNow.variants[state.keyC]);
+    if (labelD) labelD.textContent = "D · " + variantLabel(gNow && gNow.variants[state.keyD]);
     setWipe(state.wipe);
     applyZoom();
-    picture.setAttribute("data-mode", state.mode);
-    paneB.hidden = state.mode === "single";
-    wipeDivider.hidden = state.mode !== "wipe";
+    applyPaneVisibility();
     renderCompareTabs();
+  }
+
+  function updateSlotLabels(g) {
+    g = g || currentGroup();
+    if (labelA) labelA.textContent = "A · " + variantLabel(g && g.variants[state.keyA]);
+    if (labelB) labelB.textContent = "B · " + variantLabel(g && g.variants[state.keyB]);
+    if (labelC) labelC.textContent = "C · " + variantLabel(g && g.variants[state.keyC]);
+    if (labelD) labelD.textContent = "D · " + variantLabel(g && g.variants[state.keyD]);
   }
 
   function setVariant(slot, key) {
     var g = currentGroup();
     if (!g || !g.variants[key]) return;
-    if (slot === "B") {
-      state.keyB = key;
-      if (state.mode === "single") setMode("wipe");
-      else applySources(true);
+    setKeyForSlot(slot, key);
+    if (slot === "B" && state.mode === "single") {
+      setMode("wipe");
+    } else if ((slot === "C" || slot === "D") && !isQuad()) {
+      state.compareCount = 4;
+      lastPick.compareCount = 4;
+      if (state.mode === "single" || state.mode === "wipe") setMode("sbs");
+      else {
+        ensureCDKeys(g);
+        applyPaneVisibility();
+        applySources(true);
+      }
     } else {
-      state.keyA = key;
       applySources(true);
     }
     rememberPick();
     renderSlotPickers();
     renderInspector();
-    labelA.textContent = "A · " + variantLabel(g.variants[state.keyA]);
-    labelB.textContent = "B · " + variantLabel(g.variants[state.keyB]);
+    updateSlotLabels(g);
   }
 
   function setSlotRes(slot, res) {
     var g = currentGroup();
     if (!g || !res) return;
-    var key = slot === "B" ? state.keyB : state.keyA;
-    var cur = g.variants[key] || {};
+    var cur = g.variants[keyForSlot(slot)] || {};
     var fps = currentFps();
     var next = findVariantKey(g, res, fps, cur.tech || "") || findBestAtResFps(g, res, fps, cur.tech || "");
     if (next) setVariant(slot, next);
@@ -1994,8 +2194,7 @@
   function setSlotTech(slot, tech) {
     var g = currentGroup();
     if (!g) return;
-    var key = slot === "B" ? state.keyB : state.keyA;
-    var cur = g.variants[key] || {};
+    var cur = g.variants[keyForSlot(slot)] || {};
     var fps = currentFps();
     var next = findVariantKey(g, cur.resolution || "", fps, tech);
     if (next) setVariant(slot, next);
@@ -2006,6 +2205,11 @@
     var ka = state.keyA;
     state.keyA = state.keyB;
     state.keyB = ka;
+    if (isQuad() && state.keyC && state.keyD) {
+      var kc = state.keyC;
+      state.keyC = state.keyD;
+      state.keyD = kc;
+    }
     rememberPick();
     applySources(true);
     renderAll();
@@ -2047,6 +2251,11 @@
     var left = slotFileTag(va);
     var zoom = zoomFileTag();
     var ts = stampNow();
+    if (isQuad()) {
+      var vc = g && g.variants[state.keyC];
+      var vd = g && g.variants[state.keyD];
+      return name + "-A-" + left + "-B-" + slotFileTag(vb) + "-C-" + slotFileTag(vc) + "-D-" + slotFileTag(vd) + "-" + zoom + "-" + ts + ".png";
+    }
     if (state.mode === "single" || !vb) return name + "-left-" + left + "-" + zoom + "-" + ts + ".png";
     return name + "-left-" + left + "-right-" + slotFileTag(vb) + "-" + zoom + "-" + ts + ".png";
   }
@@ -2136,10 +2345,15 @@
 
     var boxA = paneBoxCss(paneA, picRect);
     var boxB = paneBoxCss(paneB, picRect);
+    var boxC = paneBoxCss(paneC, picRect);
+    var boxD = paneBoxCss(paneD, picRect);
     var g = currentGroup();
     var va = g && g.variants[state.keyA];
     var vb = g && g.variants[state.keyB];
-    var compare = state.mode !== "single";
+    var vc = g && g.variants[state.keyC];
+    var vd = g && g.variants[state.keyD];
+    var compare = isCompare();
+    var quad = isQuad();
 
     if (state.mode === "wipe") {
       drawVideoInPane(ctx, videoB, { x: 0, y: 0, w: w, h: h });
@@ -2152,6 +2366,11 @@
       var wx = w * (state.wipe / 100);
       ctx.fillStyle = "#f2f4f8";
       ctx.fillRect(wx - 1, 0, 2, h);
+    } else if (quad) {
+      drawVideoInPane(ctx, videoA, boxA);
+      drawVideoInPane(ctx, videoB, boxB);
+      drawVideoInPane(ctx, videoC, boxC);
+      drawVideoInPane(ctx, videoD, boxD);
     } else if (state.mode === "sbs") {
       drawVideoInPane(ctx, videoA, boxA);
       drawVideoInPane(ctx, videoB, boxB);
@@ -2163,11 +2382,16 @@
 
     var fontPx = Math.max(24, Math.round(h * 0.032));
     var margin = Math.max(12, Math.round(fontPx * 0.45));
-    var aText = "A · " + variantLabel(va);
-    drawShotLabel(ctx, aText, margin, margin, "left", "#6ea8fe", fontPx);
-    if (compare) {
-      var bText = "B · " + variantLabel(vb);
-      drawShotLabel(ctx, bText, w - margin, margin, "right", "#e8a838", fontPx);
+    if (quad) {
+      drawShotLabel(ctx, "A · " + variantLabel(va), boxA.x + margin, boxA.y + margin, "left", "#6ea8fe", fontPx);
+      drawShotLabel(ctx, "B · " + variantLabel(vb), boxB.x + boxB.w - margin, boxB.y + margin, "right", "#e8a838", fontPx);
+      drawShotLabel(ctx, "C · " + variantLabel(vc), boxC.x + margin, boxC.y + margin, "left", "#5eead4", fontPx);
+      drawShotLabel(ctx, "D · " + variantLabel(vd), boxD.x + boxD.w - margin, boxD.y + margin, "right", "#a78bfa", fontPx);
+    } else {
+      drawShotLabel(ctx, "A · " + variantLabel(va), margin, margin, "left", "#6ea8fe", fontPx);
+      if (compare) {
+        drawShotLabel(ctx, "B · " + variantLabel(vb), w - margin, margin, "right", "#e8a838", fontPx);
+      }
     }
     var zoomPadY = Math.round(fontPx * 0.32);
     var zoomBh = fontPx + zoomPadY * 2;
@@ -2246,6 +2470,8 @@
       state.selectedId = null;
       state.keyA = null;
       state.keyB = null;
+      state.keyC = null;
+      state.keyD = null;
     }
     saveDb(true);
     applySources(false);
@@ -2373,7 +2599,10 @@
     state.selectedId = null;
     state.keyA = null;
     state.keyB = null;
+    state.keyC = null;
+    state.keyD = null;
     state.mode = "single";
+    state.compareCount = 2;
     state.catFilter = "all";
     state.search = "";
     state.rate = 1;
@@ -2527,6 +2756,11 @@
       if (!tab || tab.disabled) return;
       setMode(tab.getAttribute("data-mode"));
     });
+    $("countTabs").addEventListener("click", function (e) {
+      var tab = e.target.closest(".tab");
+      if (!tab || tab.disabled) return;
+      setCompareCount(Number(tab.getAttribute("data-count")));
+    });
 
     $("fpsChips").addEventListener("click", function (e) {
       var chip = e.target.closest("[data-fps]");
@@ -2598,9 +2832,9 @@
       seeking = true;
       var t = Number(seek.value);
       try { videoA.currentTime = t; } catch (err) {}
-      if (state.mode !== "single") {
-        try { videoB.currentTime = t; } catch (err) {}
-      }
+      forEachCompareVideo(function (v) {
+        try { v.currentTime = t; } catch (err) {}
+      });
       updateTransport();
     });
     seek.addEventListener("change", function () { seeking = false; });
@@ -2679,23 +2913,27 @@
     });
     videoA.addEventListener("seeked", function () { syncVideos(true); updateTransport(); });
     videoA.addEventListener("play", function () {
-      if (state.mode !== "single" && videoB.getAttribute("src") && videoB.paused) {
-        videoB.play().catch(function () {});
-      }
+      forEachCompareVideo(function (v) {
+        if (v.getAttribute("src") && v.paused) v.play().catch(function () {});
+      });
       updatePlayBtn();
     });
     videoA.addEventListener("pause", function () {
-      if (state.mode !== "single" && !videoB.paused) {
-        try { videoB.pause(); } catch (err) {}
-      }
+      forEachCompareVideo(function (v) {
+        if (!v.paused) {
+          try { v.pause(); } catch (err) {}
+        }
+      });
       updatePlayBtn();
     });
     videoA.addEventListener("loadedmetadata", updateTransport);
     videoB.addEventListener("seeked", function () { syncing = false; });
+    if (videoC) videoC.addEventListener("seeked", function () { syncing = false; });
+    if (videoD) videoD.addEventListener("seeked", function () { syncing = false; });
     videoA.addEventListener("ratechange", function () {
-      if (state.mode !== "single") {
-        try { videoB.playbackRate = videoA.playbackRate; } catch (err) {}
-      }
+      forEachCompareVideo(function (v) {
+        try { v.playbackRate = videoA.playbackRate; } catch (err) {}
+      });
     });
     videoA.addEventListener("ended", updatePlayBtn);
 
@@ -2805,12 +3043,20 @@
   function cacheDom() {
     videoA = $("videoA");
     videoB = $("videoB");
+    videoC = $("videoC");
+    videoD = $("videoD");
     paneA = $("paneA");
     paneB = $("paneB");
+    paneC = $("paneC");
+    paneD = $("paneD");
     missingA = $("missingA");
     missingB = $("missingB");
+    missingC = $("missingC");
+    missingD = $("missingD");
     labelA = $("labelA");
     labelB = $("labelB");
+    labelC = $("labelC");
+    labelD = $("labelD");
     picture = $("picture");
     stage = $("stage");
     placeholder = $("placeholder");
@@ -2860,7 +3106,7 @@
     if (booted) return;
     booted = true;
     cacheDom();
-    if (!videoA || !videoB) return;
+    if (!videoA || !videoB || !videoC || !videoD) return;
     bindEvents();
     renderSpeeds();
     setWipe(50);

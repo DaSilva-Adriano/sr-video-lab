@@ -14,6 +14,10 @@
   --orig-dim: rgba(110, 168, 254, 0.16);
   --up: #e8a838;
   --up-dim: rgba(232, 168, 56, 0.16);
+  --slot-c: #5eead4;
+  --slot-c-dim: rgba(94, 234, 212, 0.16);
+  --slot-d: #a78bfa;
+  --slot-d-dim: rgba(167, 139, 250, 0.16);
   --ok: #86c98a;
   --danger: #e07070;
   --danger-dim: rgba(224, 112, 112, 0.12);
@@ -405,6 +409,19 @@ input:disabled {
   height: 100%;
 }
 
+.picture:fullscreen[data-mode="sbs"][data-compare="4"],
+.picture:-webkit-full-screen[data-mode="sbs"][data-compare="4"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.picture:fullscreen[data-mode="sbs"][data-compare="4"] .pane,
+.picture:-webkit-full-screen[data-mode="sbs"][data-compare="4"] .pane {
+  height: auto;
+  min-height: 0;
+}
+
 .picture:fullscreen video,
 .picture:-webkit-full-screen video {
   width: 100%;
@@ -461,6 +478,8 @@ input:disabled {
 
 .pane-a .pane-label { left: 8px; color: var(--orig); }
 .pane-b .pane-label { right: 8px; color: var(--up); }
+.pane-c .pane-label { left: 8px; color: var(--slot-c); }
+.pane-d .pane-label { right: 8px; color: var(--slot-d); }
 
 .pane-missing {
   position: absolute;
@@ -510,10 +529,14 @@ input:disabled {
 /* Single */
 .picture[data-mode="single"] .pane-a { position: absolute; inset: 0; }
 .picture[data-mode="single"] .pane-b,
+.picture[data-mode="single"] .pane-c,
+.picture[data-mode="single"] .pane-d,
 .picture[data-mode="single"] .wipe-divider,
 .picture[data-mode="single"] .pane-label { display: none !important; }
 
 /* Wipe */
+.picture[data-mode="wipe"] .pane-c,
+.picture[data-mode="wipe"] .pane-d { display: none !important; }
 .picture[data-mode="wipe"] .pane-a,
 .picture[data-mode="wipe"] .pane-b { position: absolute; inset: 0; }
 .picture[data-mode="wipe"] .pane-a {
@@ -568,6 +591,29 @@ input:disabled {
 }
 .picture[data-mode="sbs"] .wipe-divider { display: none !important; }
 .picture[data-mode="sbs"] .pane-a { border-right: 1px solid var(--line); }
+.picture[data-mode="sbs"] .pane-c,
+.picture[data-mode="sbs"] .pane-d { display: none; }
+
+.picture[data-mode="sbs"][data-compare="4"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.picture[data-mode="sbs"][data-compare="4"] .pane {
+  flex: none;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+}
+.picture[data-mode="sbs"][data-compare="4"] .pane-c,
+.picture[data-mode="sbs"][data-compare="4"] .pane-d { display: block; }
+.picture[data-mode="sbs"][data-compare="4"] .pane-a {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.picture[data-mode="sbs"][data-compare="4"] .pane-b { border-bottom: 1px solid var(--line); }
+.picture[data-mode="sbs"][data-compare="4"] .pane-c { border-right: 1px solid var(--line); }
 
 /* Deck: modes + chips */
 
@@ -581,7 +627,8 @@ input:disabled {
   background: var(--bg-2);
 }
 
-.mode-tabs {
+.mode-tabs,
+.count-tabs {
   display: flex;
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -637,6 +684,18 @@ input:disabled {
   border-color: var(--text);
 }
 
+.vchip.is-c {
+  border-color: var(--slot-c);
+  background: var(--slot-c-dim);
+  color: var(--slot-c);
+}
+
+.vchip.is-d {
+  border-color: var(--slot-d);
+  background: var(--slot-d-dim);
+  color: var(--slot-d);
+}
+
 .vchip .slot {
   font-size: 9px;
   margin-left: 4px;
@@ -669,6 +728,8 @@ input:disabled {
 
 .slot-pick-a .slot-lab { color: var(--orig); }
 .slot-pick-b .slot-lab { color: var(--up); }
+.slot-pick-c .slot-lab { color: var(--slot-c); }
+.slot-pick-d .slot-lab { color: var(--slot-d); }
 
 .chip-col {
   display: flex;
@@ -692,7 +753,20 @@ input:disabled {
   gap: 4px;
 }
 
-.picture[data-mode="single"] ~ .deck #slotPickB { display: none; }
+.picture[data-mode="single"] ~ .deck #slotPickB,
+.picture[data-mode="single"] ~ .deck #slotPickC,
+.picture[data-mode="single"] ~ .deck #slotPickD,
+.picture[data-mode="single"] ~ .deck #countTabs,
+.picture:not([data-compare="4"]) ~ .deck #slotPickC,
+.picture:not([data-compare="4"]) ~ .deck #slotPickD,
+.picture[data-mode="wipe"] ~ .deck #slotPickC,
+.picture[data-mode="wipe"] ~ .deck #slotPickD { display: none; }
+
+.picture[data-mode="sbs"][data-compare="4"] ~ .deck .slot-pickers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+}
 
 #btnSwap { flex: 0 0 auto; }
 
@@ -978,6 +1052,8 @@ input:disabled {
 
 .var-row.is-a { border-color: rgba(110,168,254,0.5); }
 .var-row.is-b { border-color: rgba(232,168,56,0.5); }
+.var-row.is-c { border-color: rgba(94,234,212,0.5); }
+.var-row.is-d { border-color: rgba(167,139,250,0.5); }
 
 .var-file {
   font-family: var(--mono);
@@ -1021,6 +1097,8 @@ input:disabled {
 .slot-btns {
   margin-left: auto;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 3px;
 }
 
