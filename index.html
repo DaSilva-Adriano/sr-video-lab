@@ -26,6 +26,7 @@
         <button type="button" class="btn" id="btnLoadFolder" aria-label="Load video folder" title="Chrome folder picker with write access, so files can be renamed">Load video folder</button>
         <button type="button" class="btn btn-ghost" id="btnImport" aria-label="Import JSON">Import JSON</button>
         <button type="button" class="btn btn-ghost" id="btnExport" aria-label="Export JSON">Export JSON</button>
+        <button type="button" class="btn btn-ghost btn-ghost-danger" id="btnClearData" aria-label="Clear data" title="Download a backup, then clear saved clips. Categories are kept. Video files on disk are not deleted.">Clear data</button>
         <button type="button" class="btn btn-ghost" id="btnCategories" aria-label="Edit categories">Categories</button>
       </div>
 
@@ -57,6 +58,11 @@
           <div class="placeholder" id="placeholder">
             <p class="ph-kicker">No clip selected</p>
             <p class="ph-body" id="placeholderBody">Load a folder of MP4s named category-title-resolution[-tech].mp4</p>
+          </div>
+          <div class="zoom-hud" id="zoomHud" hidden>
+            <button type="button" class="icon-btn" id="btnZoomOut" title="Zoom out (−)" aria-label="Zoom out">−</button>
+            <button type="button" class="zoom-read" id="btnZoomReset" title="Reset zoom (0)" aria-label="Reset zoom">1×</button>
+            <button type="button" class="icon-btn" id="btnZoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
           </div>
         </div>
 
@@ -93,6 +99,11 @@
             <span class="timecode" id="timeLabel">0:00.00 / 0:00.00</span>
           </div>
           <div class="speeds" id="speeds" role="group" aria-label="Playback speed"></div>
+          <div class="zoom-cluster" id="zoomCluster" role="group" aria-label="Zoom">
+            <button type="button" class="icon-btn" id="btnZoomOutBar" title="Zoom out (−)" aria-label="Zoom out">−</button>
+            <button type="button" class="zoom-read" id="btnZoomResetBar" title="Reset zoom (0)" aria-label="Reset zoom">1×</button>
+            <button type="button" class="icon-btn" id="btnZoomInBar" title="Zoom in (+)" aria-label="Zoom in">+</button>
+          </div>
           <button type="button" class="btn btn-ghost btn-sm" id="btnFs" title="Fullscreen the stage (F)" aria-label="Fullscreen">Fullscreen</button>
         </div>
       </section>

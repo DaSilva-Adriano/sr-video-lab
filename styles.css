@@ -163,6 +163,12 @@ button { cursor: pointer; }
 
 .btn-ghost:hover { color: var(--text); background: var(--bg-3); }
 
+.btn-ghost-danger { color: var(--danger); }
+.btn-ghost-danger:hover {
+  color: #f2b4b4;
+  background: var(--danger-dim);
+}
+
 .btn-sm { height: 26px; padding: 0 8px; font-size: 11px; }
 
 .btn-danger {
@@ -413,7 +419,14 @@ input:disabled {
   position: relative;
   background: #000;
   --wipe: 50%;
+  user-select: none;
 }
+
+.picture.is-zoomed {
+  cursor: grab;
+  touch-action: none;
+}
+.picture.is-zoomed.is-panning { cursor: grabbing; }
 
 .pane {
   position: relative;
@@ -427,6 +440,8 @@ input:disabled {
   object-fit: contain;
   background: #000;
   display: block;
+  transform-origin: center center;
+  pointer-events: none;
 }
 
 .pane-label {
@@ -724,6 +739,85 @@ input:disabled {
 .spd:last-child { border-right: 0; }
 
 .spd.is-on { background: var(--bg-4); color: var(--text); }
+
+.zoom-cluster {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.zoom-cluster .icon-btn {
+  width: 26px;
+  height: 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-right: 1px solid var(--line);
+}
+
+.zoom-cluster .icon-btn:last-child { border-right: 0; }
+
+.zoom-read {
+  height: 24px;
+  min-width: 42px;
+  padding: 0 6px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.zoom-cluster .zoom-read:hover,
+.zoom-cluster .icon-btn:hover { background: var(--bg-4); color: var(--text); }
+
+.zoom-hud {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 7;
+  display: none;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: rgba(8, 9, 12, 0.82);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.picture:fullscreen .zoom-hud,
+.picture:-webkit-full-screen .zoom-hud,
+.picture.is-fs .zoom-hud {
+  display: flex;
+}
+
+.picture:fullscreen .zoom-hud[hidden],
+.picture:-webkit-full-screen .zoom-hud[hidden],
+.picture.is-fs .zoom-hud[hidden] {
+  display: none !important;
+}
+
+.zoom-hud .icon-btn {
+  width: 28px;
+  height: 26px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-right: 1px solid var(--line);
+}
+
+.zoom-hud .icon-btn:last-child { border-right: 0; }
+
+.zoom-hud .zoom-read {
+  height: 26px;
+  color: var(--text);
+}
+
+.zoom-hud .zoom-read:hover,
+.zoom-hud .icon-btn:hover { background: var(--bg-4); }
 
 .fps-row {
   display: flex;

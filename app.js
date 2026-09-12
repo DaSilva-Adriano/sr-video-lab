@@ -6,6 +6,10 @@
   var FRAME_DT = 1 / 24;
   var DRIFT = 0.08;
   var SPEEDS = [0.25, 0.5, 1, 1.5, 2];
+  var ZOOM_MIN = 1;
+  var ZOOM_MAX = 16;
+  var ZOOM_STEP = 1.25;
+  var WHEEL_STEP = 1.12;
   var RES_TOKENS = ["240p", "360p", "480p", "720p", "1080p", "1440p", "4k", "2160p", "8k"];
   var RES_RANK = {
     "240p": 0, "360p": 1, "480p": 2, "720p": 3, "1080p": 4,
@@ -90,7 +94,10 @@
     hasFolder: false,
     draggingId: null,
     wiping: false,
-    canWrite: false
+    canWrite: false,
+    zoom: 1,
+    panX: 0,
+    panY: 0
   };
 
   var lastExportJson = "";
@@ -99,6 +106,7 @@
   var seeking = false;
   var syncing = false;
   var booted = false;
+  var panDrag = { on: false, pointerId: 0, sx: 0, sy: 0, ox: 0, oy: 0 };
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -1154,6 +1162,7 @@
     }
     updatePlayBtn();
     updateTransport();
+    updateZoomUi();
   }
 
   function syncVideos(force) {
@@ -1274,6 +1283,114 @@
     picture.style.setProperty("--wipe", state.wipe + "%");
   }
 
+  function formatZoom(z) {
+    if (!Number.isFinite(z) || z <= 1.001) return "1×";
+    if (Math.abs(z - Math.round(z)) < 0.05) return Math.round(z) + "×";
+    return (Math.round(z * 10) / 10) + "×";
+  }
+
+  function canZoom() {
+    return !!(picture && placeholder && placeholder.hidden && videoA && videoA.getAttribute("src"));
+  }
+
+  function zoomRectForPoint(clientX, clientY) {
+    if (state.mode === "sbs" && paneA && paneB) {
+      var rb = paneB.getBoundingClientRect();
+      if (clientX >= rb.left) return rb;
+      return paneA.getBoundingClientRect();
+    }
+    return picture.getBoundingClientRect();
+  }
+
+  function clampPan() {
+    if (state.zoom <= 1.001) {
+      state.zoom = 1;
+      state.panX = 0;
+      state.panY = 0;
+      return;
+    }
+    var rect = (state.mode === "sbs" && paneA ? paneA : picture).getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    var maxX = (rect.width * (state.zoom - 1)) / 2;
+    var maxY = (rect.height * (state.zoom - 1)) / 2;
+    state.panX = Math.max(-maxX, Math.min(maxX, state.panX));
+    state.panY = Math.max(-maxY, Math.min(maxY, state.panY));
+  }
+
+  function applyZoom() {
+    clampPan();
+    var t = state.zoom <= 1.001
+      ? "none"
+      : "translate(" + state.panX + "px, " + state.panY + "px) scale(" + state.zoom + ")";
+    if (videoA) videoA.style.transform = t;
+    if (videoB) videoB.style.transform = t;
+    if (picture) {
+      picture.classList.toggle("is-zoomed", state.zoom > 1.001);
+      if (state.zoom <= 1.001) picture.classList.remove("is-panning");
+    }
+    updateZoomUi();
+  }
+
+  function updateZoomUi() {
+    var label = formatZoom(state.zoom);
+    var ids = ["btnZoomReset", "btnZoomResetBar"];
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      var el = $(ids[i]);
+      if (el) el.textContent = label;
+    }
+    var atMin = state.zoom <= ZOOM_MIN + 0.001;
+    var atMax = state.zoom >= ZOOM_MAX - 0.001;
+    var outIds = ["btnZoomOut", "btnZoomOutBar"];
+    var inIds = ["btnZoomIn", "btnZoomInBar"];
+    for (i = 0; i < outIds.length; i++) {
+      if ($(outIds[i])) $(outIds[i]).disabled = atMin || !canZoom();
+    }
+    for (i = 0; i < inIds.length; i++) {
+      if ($(inIds[i])) $(inIds[i]).disabled = atMax || !canZoom();
+    }
+    var hud = $("zoomHud");
+    if (hud) hud.hidden = !(placeholder && placeholder.hidden);
+  }
+
+  function zoomAt(clientX, clientY, factor) {
+    if (!canZoom()) return;
+    var rect = zoomRectForPoint(clientX, clientY);
+    var cx = clientX - rect.left - rect.width / 2;
+    var cy = clientY - rect.top - rect.height / 2;
+    var oldZoom = state.zoom || 1;
+    var next = oldZoom * factor;
+    if (next < ZOOM_MIN) next = ZOOM_MIN;
+    if (next > ZOOM_MAX) next = ZOOM_MAX;
+    if (Math.abs(next - 1) < 0.02) next = 1;
+    if (next <= 1) {
+      state.zoom = 1;
+      state.panX = 0;
+      state.panY = 0;
+      applyZoom();
+      return;
+    }
+    var contentX = (cx - state.panX) / oldZoom;
+    var contentY = (cy - state.panY) / oldZoom;
+    state.zoom = next;
+    state.panX = cx - contentX * next;
+    state.panY = cy - contentY * next;
+    applyZoom();
+  }
+
+  function zoomBy(factor) {
+    if (!picture) return;
+    var rect = (state.mode === "sbs" && paneA ? paneA : picture).getBoundingClientRect();
+    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+  }
+
+  function resetZoom() {
+    state.zoom = 1;
+    state.panX = 0;
+    state.panY = 0;
+    applyZoom();
+  }
+
   function setMode(mode) {
     var g = currentGroup();
     var n = g ? variantCount(g) : 0;
@@ -1289,6 +1406,7 @@
     var bWrap = $("abB");
     if (bWrap) bWrap.style.display = mode === "single" ? "none" : "";
     applySources(true);
+    applyZoom();
     renderFpsChips();
     renderVariantChips();
     renderAbSelects();
@@ -1318,23 +1436,28 @@
       placeholderBody.textContent = state.hasFolder
         ? "Select a group in the library."
         : "Load video folder to play. Metadata is already here.";
+      updateZoomUi();
       return;
     }
     if (!state.hasFolder || !groupOnDisk(g)) {
       placeholder.hidden = false;
       placeholder.querySelector(".ph-kicker").textContent = g.title || "Clip";
       placeholderBody.textContent = "Load video folder to play. Metadata is already here.";
+      updateZoomUi();
       return;
     }
     placeholder.hidden = true;
+    updateZoomUi();
   }
 
   function openGroup(id, keepMode) {
+    var prevId = state.selectedId;
     var g = null;
     for (var i = 0; i < state.db.groups.length; i++) {
       if (state.db.groups[i].id === id) { g = state.db.groups[i]; break; }
     }
     state.selectedId = g ? g.id : null;
+    if (!g || g.id !== prevId) resetZoom();
     if (g) {
       var ab = pickDefaultAB(g);
       state.keyA = ab.a;
@@ -1639,6 +1762,7 @@
     labelA.textContent = "A · " + variantLabel(currentGroup() && currentGroup().variants[state.keyA]);
     labelB.textContent = "B · " + variantLabel(currentGroup() && currentGroup().variants[state.keyB]);
     setWipe(state.wipe);
+    applyZoom();
     var n = currentGroup() ? variantCount(currentGroup()) : 0;
     picture.setAttribute("data-mode", state.mode);
     paneB.hidden = state.mode === "single";
@@ -1792,24 +1916,79 @@
     renderAll();
   }
 
-  function exportJson() {
-    var text = stringifyDb(state.db);
-    lastExportJson = text;
+  function stampBackupName() {
+    var d = new Date();
+    function pad(n) { return (n < 10 ? "0" : "") + n; }
+    return "videos-backup-" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + ".json";
+  }
+
+  function downloadJsonText(text, filename) {
     var blob = new Blob([text], { type: "application/json" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "videos.json";
+    a.download = filename || "videos.json";
     document.body.appendChild(a);
     a.click();
     setTimeout(function () {
       URL.revokeObjectURL(a.href);
       a.remove();
     }, 0);
+  }
+
+  function exportJson() {
+    var text = stringifyDb(state.db);
+    lastExportJson = text;
+    downloadJsonText(text, "videos.json");
     updateSavePill(false);
     saveStatus.textContent = "Exported · videos.json";
     saveStatus.className = "save-pill flash";
     clearTimeout(flashTimer);
     flashTimer = setTimeout(function () { updateSavePill(false); }, 1200);
+  }
+
+  function clearAllData() {
+    if (!confirm("Download a backup of the library, then clear all saved clip data?\n\nCategories are kept. Video files on disk are not deleted.")) return;
+    downloadJsonText(stringifyDb(state.db), stampBackupName());
+    var keptCats = clone((state.db && state.db.categories) || []);
+    if (!keptCats.length) keptCats = clone(DEFAULT_DB.categories);
+    var keptSettings = (state.db && state.db.settings && typeof state.db.settings === "object")
+      ? clone(state.db.settings)
+      : {};
+    revokeAllUrls();
+    fileMap.clear();
+    fileByName.clear();
+    handleMap.clear();
+    rootDirHandle = null;
+    state.hasFolder = false;
+    state.canWrite = false;
+    state.selectedId = null;
+    state.keyA = null;
+    state.keyB = null;
+    state.mode = "single";
+    state.catFilter = "all";
+    state.search = "";
+    state.rate = 1;
+    state.muted = false;
+    state.wipe = 50;
+    resetZoom();
+    var search = $("search");
+    if (search) search.value = "";
+    pauseBoth();
+    state.db = normalizeDb({
+      categories: keptCats,
+      groups: [],
+      settings: keptSettings
+    });
+    saveDb(true);
+    applySources(false);
+    renderAll();
+    if (saveStatus) {
+      saveStatus.textContent = "Cleared · backup downloaded";
+      saveStatus.className = "save-pill flash";
+    }
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () { updateSavePill(false); }, 1600);
   }
 
   function importJsonFile(file) {
@@ -1857,6 +2036,7 @@
       e.target.value = "";
     });
     $("btnExport").addEventListener("click", exportJson);
+    $("btnClearData").addEventListener("click", clearAllData);
     $("btnCategories").addEventListener("click", function () {
       renderCatModal();
       $("catModal").hidden = false;
@@ -1971,16 +2151,33 @@
       updateMuteBtn();
     });
     $("btnFs").addEventListener("click", toggleFullscreen);
-    document.addEventListener("fullscreenchange", function () {
+    function onFsChange() {
       var on = fsElement() === picture || fsElement() === stage;
       document.documentElement.classList.toggle("is-fs", on);
       picture.classList.toggle("is-fs", on);
+      applyZoom();
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("webkitfullscreenchange", onFsChange);
+    window.addEventListener("resize", function () {
+      if (state.zoom > 1) applyZoom();
     });
-    document.addEventListener("webkitfullscreenchange", function () {
-      var on = fsElement() === picture || fsElement() === stage;
-      document.documentElement.classList.toggle("is-fs", on);
-      picture.classList.toggle("is-fs", on);
-    });
+
+    function bindZoomBtn(id, fn) {
+      var el = $(id);
+      if (!el) return;
+      el.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        fn();
+      });
+    }
+    bindZoomBtn("btnZoomIn", function () { zoomBy(ZOOM_STEP); });
+    bindZoomBtn("btnZoomInBar", function () { zoomBy(ZOOM_STEP); });
+    bindZoomBtn("btnZoomOut", function () { zoomBy(1 / ZOOM_STEP); });
+    bindZoomBtn("btnZoomOutBar", function () { zoomBy(1 / ZOOM_STEP); });
+    bindZoomBtn("btnZoomReset", resetZoom);
+    bindZoomBtn("btnZoomResetBar", resetZoom);
 
     seek.addEventListener("input", function () {
       seeking = true;
@@ -1995,8 +2192,53 @@
 
     picture.addEventListener("dblclick", function (e) {
       if (e.target === wipeDivider || (e.target && e.target.closest && e.target.closest(".wipe-divider"))) return;
+      if (e.target && e.target.closest && e.target.closest(".zoom-hud")) return;
+      if (state.zoom > 1.001) {
+        resetZoom();
+        return;
+      }
       toggleFullscreen();
     });
+
+    picture.addEventListener("wheel", function (e) {
+      if (!canZoom()) return;
+      if (e.target && e.target.closest && e.target.closest(".zoom-hud")) return;
+      e.preventDefault();
+      var factor = e.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP;
+      zoomAt(e.clientX, e.clientY, factor);
+    }, { passive: false });
+
+    picture.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      if (state.zoom <= 1.001) return;
+      if (e.target === wipeDivider || (e.target && e.target.closest && e.target.closest(".wipe-divider"))) return;
+      if (e.target && e.target.closest && e.target.closest(".zoom-hud")) return;
+      panDrag.on = true;
+      panDrag.pointerId = e.pointerId;
+      panDrag.sx = e.clientX;
+      panDrag.sy = e.clientY;
+      panDrag.ox = state.panX;
+      panDrag.oy = state.panY;
+      picture.classList.add("is-panning");
+      try { picture.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    });
+    picture.addEventListener("pointermove", function (e) {
+      if (!panDrag.on) return;
+      state.panX = panDrag.ox + (e.clientX - panDrag.sx);
+      state.panY = panDrag.oy + (e.clientY - panDrag.sy);
+      applyZoom();
+    });
+    function endPan(e) {
+      if (!panDrag.on) return;
+      if (e && panDrag.pointerId && e.pointerId !== panDrag.pointerId) return;
+      panDrag.on = false;
+      picture.classList.remove("is-panning");
+      try { picture.releasePointerCapture(panDrag.pointerId); } catch (err) {}
+    }
+    picture.addEventListener("pointerup", endPan);
+    picture.addEventListener("pointercancel", endPan);
+    picture.addEventListener("dragstart", function (e) { e.preventDefault(); });
 
     wipeDivider.addEventListener("pointerdown", function (e) {
       state.wiping = true;
@@ -2088,6 +2330,18 @@
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         e.preventDefault();
         toggleFullscreen();
+      } else if (e.key === "+" || e.key === "=" || e.code === "NumpadAdd") {
+        if (e.ctrlKey || e.metaKey) return;
+        e.preventDefault();
+        zoomBy(ZOOM_STEP);
+      } else if (e.key === "-" || e.key === "_" || e.code === "NumpadSubtract") {
+        if (e.ctrlKey || e.metaKey) return;
+        e.preventDefault();
+        zoomBy(1 / ZOOM_STEP);
+      } else if (e.key === "0" || e.code === "Numpad0") {
+        if (e.ctrlKey || e.metaKey) return;
+        e.preventDefault();
+        resetZoom();
       } else if (e.key === "Escape") {
         $("catModal").hidden = true;
       }
