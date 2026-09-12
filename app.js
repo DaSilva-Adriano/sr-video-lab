@@ -72,7 +72,7 @@
   var videoA, videoB, paneA, paneB, missingA, missingB, labelA, labelB;
   var picture, stage, placeholder, placeholderBody, wipeDivider;
   var seek, timeLabel, btnPlay, btnMute, saveStatus;
-  var libraryList, catChips, variantChips, selectA, selectB, dropOverlay;
+  var libraryList, catChips, dropOverlay;
 
   var fileMap = new Map();
   var fileByName = new Map();
@@ -107,6 +107,14 @@
   var syncing = false;
   var booted = false;
   var panDrag = { on: false, pointerId: 0, sx: 0, sy: 0, ox: 0, oy: 0 };
+  var lastPick = {
+    mode: "single",
+    fps: null,
+    resA: null,
+    techA: null,
+    resB: null,
+    techB: null
+  };
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -1084,6 +1092,153 @@
     return Object.keys((g && g.variants) || {}).length;
   }
 
+  function techLabel(tech) {
+    return tech ? tech : "Original";
+  }
+
+  function clearLastPick() {
+    lastPick.mode = "single";
+    lastPick.fps = null;
+    lastPick.resA = null;
+    lastPick.techA = null;
+    lastPick.resB = null;
+    lastPick.techB = null;
+  }
+
+  function rememberPick() {
+    var g = currentGroup();
+    if (!g) return;
+    var va = g.variants[state.keyA];
+    var vb = g.variants[state.keyB];
+    if (va) {
+      lastPick.fps = normFps(va);
+      lastPick.resA = va.resolution || "";
+      lastPick.techA = va.tech || "";
+    }
+    if (vb) {
+      lastPick.resB = vb.resolution || "";
+      lastPick.techB = vb.tech || "";
+    }
+  }
+
+  function groupResList(group, fps) {
+    var seen = {};
+    var list = [];
+    if (!group) return list;
+    sortVariantKeys(group).forEach(function (k) {
+      var v = group.variants[k];
+      if (!v || !v.resolution) return;
+      if (fps != null && Math.abs(normFps(v) - fps) > 0.05) return;
+      if (seen[v.resolution]) return;
+      seen[v.resolution] = true;
+      list.push(v.resolution);
+    });
+    list.sort(function (a, b) { return rankRes(a) - rankRes(b); });
+    return list;
+  }
+
+  function groupTechList(group, fps, res) {
+    var seen = {};
+    var list = [];
+    if (!group) return list;
+    sortVariantKeys(group).forEach(function (k) {
+      var v = group.variants[k];
+      if (!v) return;
+      if (fps != null && Math.abs(normFps(v) - fps) > 0.05) return;
+      if (res && v.resolution !== res) return;
+      var t = v.tech || "";
+      if (seen[t]) return;
+      seen[t] = true;
+      list.push(t);
+    });
+    list.sort(function (a, b) {
+      if (!a && b) return -1;
+      if (a && !b) return 1;
+      return String(a).localeCompare(String(b));
+    });
+    return list;
+  }
+
+  function findVariantKey(group, res, fps, tech) {
+    if (!group) return null;
+    var keys = sortVariantKeys(group);
+    var wantTech = tech || "";
+    var exact = null;
+    var ranked = null;
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      var v = group.variants[keys[i]];
+      if (!v) continue;
+      if (fps != null && Math.abs(normFps(v) - fps) > 0.05) continue;
+      if ((v.tech || "") !== wantTech) continue;
+      if (!res || v.resolution === res) {
+        exact = keys[i];
+        break;
+      }
+      if (!ranked && sameRank(v.resolution, res)) ranked = keys[i];
+    }
+    return exact || ranked;
+  }
+
+  function findBestAtResFps(group, res, fps, preferTech) {
+    if (!group) return null;
+    var keys = sortVariantKeys(group).filter(function (k) {
+      var v = group.variants[k];
+      if (!v) return false;
+      if (fps != null && Math.abs(normFps(v) - fps) > 0.05) return false;
+      if (res && v.resolution !== res && !sameRank(v.resolution, res)) return false;
+      return true;
+    });
+    if (!keys.length) return null;
+    function score(k) {
+      var v = group.variants[k];
+      var s = 0;
+      if ((v.tech || "") === (preferTech || "")) s += 8;
+      if (v.resolution === res) s += 4;
+      if (!v.tech) s += 2;
+      if (variantOnDisk(v)) s += 1;
+      return s;
+    }
+    keys.sort(function (a, b) { return score(b) - score(a); });
+    return keys[0];
+  }
+
+  function matchSlot(group, res, tech, fps, fallback) {
+    if (!group) return fallback || null;
+    if (res != null || tech != null) {
+      var key = findVariantKey(group, res, fps, tech);
+      if (key) return key;
+      key = findBestAtResFps(group, res, fps, tech);
+      if (key) return key;
+      key = findVariantKey(group, null, fps, tech);
+      if (key) return key;
+      key = findBestAtResFps(group, null, fps, tech);
+      if (key) return key;
+    }
+    return fallback || null;
+  }
+
+  function pickFpsForGroup(group, want) {
+    var list = groupFpsList(group);
+    if (!list.length) {
+      var all = [];
+      var seen = {};
+      sortVariantKeys(group).forEach(function (k) {
+        var f = normFps(group.variants[k]);
+        var tag = formatFps(f);
+        if (!seen[tag]) { seen[tag] = true; all.push(f); }
+      });
+      list = all;
+    }
+    if (!list.length) return want != null ? want : 60;
+    var i;
+    if (want != null) {
+      for (i = 0; i < list.length; i++) if (Math.abs(list[i] - want) < 0.05) return list[i];
+    }
+    for (i = 0; i < list.length; i++) if (Math.abs(list[i] - 60) < 0.05) return list[i];
+    return list[0];
+  }
+
   function restoreState() {
     return {
       time: videoA.currentTime || 0,
@@ -1403,13 +1558,14 @@
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].classList.toggle("is-on", tabs[i].getAttribute("data-mode") === mode);
     }
-    var bWrap = $("abB");
+    var bWrap = $("slotPickB");
     if (bWrap) bWrap.style.display = mode === "single" ? "none" : "";
+    lastPick.mode = state.mode;
+    rememberPick();
     applySources(true);
     applyZoom();
     renderFpsChips();
-    renderVariantChips();
-    renderAbSelects();
+    renderSlotPickers();
   }
 
     function fsElement() {
@@ -1460,11 +1616,22 @@
     if (!g || g.id !== prevId) resetZoom();
     if (g) {
       var ab = pickDefaultAB(g);
-      state.keyA = ab.a;
-      state.keyB = ab.b;
-      if (!keepMode) {
-        if (variantCount(g) < 2 && (state.mode === "wipe" || state.mode === "sbs")) state.mode = "single";
+      var fps = pickFpsForGroup(g, lastPick.fps);
+      var hasMemory = lastPick.resA != null || lastPick.techA != null || lastPick.resB != null;
+      if (hasMemory) {
+        state.keyA = matchSlot(g, lastPick.resA, lastPick.techA, fps, ab.a);
+        state.keyB = matchSlot(g, lastPick.resB, lastPick.techB, fps, ab.b);
+        if (state.keyB && state.keyB === state.keyA && ab.b && ab.b !== state.keyA) {
+          var bAlt = matchSlot(g, lastPick.resB, lastPick.techB, fps, null);
+          state.keyB = (bAlt && bAlt !== state.keyA) ? bAlt : ab.b;
+        }
+      } else {
+        state.keyA = ab.a;
+        state.keyB = ab.b;
       }
+      if (variantCount(g) < 2) state.mode = "single";
+      else if (lastPick.mode === "wipe" || lastPick.mode === "sbs") state.mode = lastPick.mode;
+      rememberPick();
     } else {
       state.keyA = null;
       state.keyB = null;
@@ -1552,33 +1719,20 @@
     libraryList.innerHTML = html;
   }
 
-  function fillSelect(sel, group, current) {
-    var keys = sortVariantKeys(group);
-    sel.innerHTML = keys.map(function (k) {
-      var v = group.variants[k];
-      return '<option value="' + esc(k) + '"' + (k === current ? " selected" : "") + ">" + esc(variantLabel(v)) + "</option>";
-    }).join("");
-    sel.disabled = !keys.length;
-  }
-
-  function renderAbSelects() {
+  function renderCompareTabs() {
     var g = currentGroup();
-    if (!g) {
-      selectA.innerHTML = "";
-      selectB.innerHTML = "";
-      selectA.disabled = true;
-      selectB.disabled = true;
-      return;
-    }
-    fillSelect(selectA, g, state.keyA);
-    fillSelect(selectB, g, state.keyB);
-    var n = variantCount(g);
-    selectB.disabled = n < 2 || state.mode === "single";
+    var n = g ? variantCount(g) : 0;
     var tabs = document.querySelectorAll(".tab");
-    for (var i = 0; i < tabs.length; i++) {
+    var i;
+    for (i = 0; i < tabs.length; i++) {
       var m = tabs[i].getAttribute("data-mode");
       tabs[i].disabled = (m === "wipe" || m === "sbs") && n < 2;
+      tabs[i].classList.toggle("is-on", m === state.mode);
     }
+    var bWrap = $("slotPickB");
+    if (bWrap) bWrap.style.display = state.mode === "single" ? "none" : "";
+    var swap = $("btnSwap");
+    if (swap) swap.disabled = !state.keyB;
   }
 
   function currentFps() {
@@ -1639,6 +1793,7 @@
       if (b) state.keyB = b;
     }
     applySources(true);
+    rememberPick();
     renderAll();
   }
 
@@ -1655,23 +1810,58 @@
     }).join("");
   }
 
-  function renderVariantChips() {
-    var g = currentGroup();
-    if (!g) { variantChips.innerHTML = ""; return; }
-    var fpsA = currentFps();
-    var keys = sortVariantKeys(g).filter(function (k) {
-      return Math.abs(normFps(g.variants[k]) - fpsA) < 0.05;
-    });
-    variantChips.innerHTML = keys.map(function (k) {
-      var v = g.variants[k];
-      var cls = "vchip " + (v.tech ? "up" : "orig");
-      if (k === state.keyA) cls += " is-a";
-      if (state.mode !== "single" && k === state.keyB) cls += " is-b";
-      var slot = "";
-      if (k === state.keyA) slot += '<span class="slot">A</span>';
-      if (state.mode !== "single" && k === state.keyB) slot += '<span class="slot">B</span>';
-      return '<button type="button" class="' + cls + '" data-key="' + esc(k) + '">' + esc(variantLabel(v, { hideFps: true })) + slot + "</button>";
+  function renderChipRow(el, items, selected, kind, slotMark) {
+    if (!el) return;
+    var onCls = slotMark === "B" ? " is-b" : " is-a";
+    el.innerHTML = items.map(function (item) {
+      var value = item.value;
+      var lab = item.label;
+      var cls = "vchip " + (item.up ? "up" : "orig");
+      if (value === selected) cls += onCls;
+      var attr = kind === "res" ? "data-res" : "data-tech";
+      return '<button type="button" class="' + cls + '" ' + attr + '="' + esc(value) + '">' + esc(lab) + "</button>";
     }).join("");
+  }
+
+  function renderSlotPickers() {
+    var g = currentGroup();
+    renderCompareTabs();
+    if (!g) {
+      renderChipRow($("resChipsA"), [], "", "res", "A");
+      renderChipRow($("techChipsA"), [], "", "tech", "A");
+      renderChipRow($("resChipsB"), [], "", "res", "B");
+      renderChipRow($("techChipsB"), [], "", "tech", "B");
+      return;
+    }
+    var fps = currentFps();
+    var va = g.variants[state.keyA] || {};
+    var vb = g.variants[state.keyB] || {};
+    var resA = va.resolution || "";
+    var resB = vb.resolution || "";
+    var techA = va.tech || "";
+    var techB = vb.tech || "";
+    var resItems = groupResList(g, fps).map(function (r) {
+      return { value: r, label: r, up: false };
+    });
+    if (resA && !resItems.some(function (it) { return it.value === resA; })) {
+      resItems.push({ value: resA, label: resA, up: false });
+    }
+    if (resB && !resItems.some(function (it) { return it.value === resB; })) {
+      resItems.push({ value: resB, label: resB, up: false });
+    }
+    function techItems(res, current) {
+      var list = groupTechList(g, fps, res).map(function (t) {
+        return { value: t, label: techLabel(t), up: !!t };
+      });
+      if (current != null && !list.some(function (it) { return it.value === current; })) {
+        list.push({ value: current, label: techLabel(current), up: !!current });
+      }
+      return list;
+    }
+    renderChipRow($("resChipsA"), resItems, resA, "res", "A");
+    renderChipRow($("techChipsA"), techItems(resA, techA), techA, "tech", "A");
+    renderChipRow($("resChipsB"), resItems, resB, "res", "B");
+    renderChipRow($("techChipsB"), techItems(resB, techB), techB, "tech", "B");
   }
 
   function renderSpeeds() {
@@ -1753,8 +1943,7 @@
     renderLibrary();
     renderInspector();
     renderFpsChips();
-    renderVariantChips();
-    renderAbSelects();
+    renderSlotPickers();
     renderSpeeds();
     updatePlaceholder();
     updateMuteBtn();
@@ -1763,18 +1952,10 @@
     labelB.textContent = "B · " + variantLabel(currentGroup() && currentGroup().variants[state.keyB]);
     setWipe(state.wipe);
     applyZoom();
-    var n = currentGroup() ? variantCount(currentGroup()) : 0;
     picture.setAttribute("data-mode", state.mode);
     paneB.hidden = state.mode === "single";
     wipeDivider.hidden = state.mode !== "wipe";
-    var bWrap = $("abB");
-    if (bWrap) bWrap.style.display = state.mode === "single" ? "none" : "";
-    var tabs = document.querySelectorAll(".tab");
-    for (var i = 0; i < tabs.length; i++) {
-      var m = tabs[i].getAttribute("data-mode");
-      tabs[i].classList.toggle("is-on", m === state.mode);
-      tabs[i].disabled = (m === "wipe" || m === "sbs") && n < 2;
-    }
+    renderCompareTabs();
   }
 
   function setVariant(slot, key) {
@@ -1788,11 +1969,41 @@
       state.keyA = key;
       applySources(true);
     }
-    renderVariantChips();
-    renderAbSelects();
+    rememberPick();
+    renderSlotPickers();
     renderInspector();
     labelA.textContent = "A · " + variantLabel(g.variants[state.keyA]);
     labelB.textContent = "B · " + variantLabel(g.variants[state.keyB]);
+  }
+
+  function setSlotRes(slot, res) {
+    var g = currentGroup();
+    if (!g || !res) return;
+    var key = slot === "B" ? state.keyB : state.keyA;
+    var cur = g.variants[key] || {};
+    var fps = currentFps();
+    var next = findVariantKey(g, res, fps, cur.tech || "") || findBestAtResFps(g, res, fps, cur.tech || "");
+    if (next) setVariant(slot, next);
+  }
+
+  function setSlotTech(slot, tech) {
+    var g = currentGroup();
+    if (!g) return;
+    var key = slot === "B" ? state.keyB : state.keyA;
+    var cur = g.variants[key] || {};
+    var fps = currentFps();
+    var next = findVariantKey(g, cur.resolution || "", fps, tech);
+    if (next) setVariant(slot, next);
+  }
+
+  function swapAB() {
+    if (!state.keyB) return;
+    var ka = state.keyA;
+    state.keyA = state.keyB;
+    state.keyB = ka;
+    rememberPick();
+    applySources(true);
+    renderAll();
   }
 
   function persistInspectorFields() {
@@ -1971,6 +2182,7 @@
     state.rate = 1;
     state.muted = false;
     state.wipe = 50;
+    clearLastPick();
     resetZoom();
     var search = $("search");
     if (search) search.value = "";
@@ -2125,16 +2337,16 @@
       setFps(Number(chip.getAttribute("data-fps")));
     });
 
-    variantChips.addEventListener("click", function (e) {
+    $("slotPickers").addEventListener("click", function (e) {
       var chip = e.target.closest(".vchip");
       if (!chip) return;
-      var key = chip.getAttribute("data-key");
-      if (e.shiftKey && state.mode !== "single") setVariant("B", key);
-      else setVariant("A", key);
+      var pick = chip.closest(".slot-pick");
+      var slot = pick && pick.getAttribute("data-slot");
+      if (!slot) return;
+      if (chip.hasAttribute("data-res")) setSlotRes(slot, chip.getAttribute("data-res"));
+      else if (chip.hasAttribute("data-tech")) setSlotTech(slot, chip.getAttribute("data-tech") || "");
     });
-
-    selectA.addEventListener("change", function () { setVariant("A", selectA.value); });
-    selectB.addEventListener("change", function () { setVariant("B", selectB.value); });
+    $("btnSwap").addEventListener("click", swapAB);
 
     $("speeds").addEventListener("click", function (e) {
       var b = e.target.closest(".spd");
@@ -2404,9 +2616,6 @@
     saveStatus = $("saveStatus");
     libraryList = $("libraryList");
     catChips = $("catChips");
-    variantChips = $("variantChips");
-    selectA = $("selectA");
-    selectB = $("selectB");
     dropOverlay = $("dropOverlay");
   }
 

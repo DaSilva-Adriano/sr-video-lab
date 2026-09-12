@@ -607,14 +607,6 @@ input:disabled {
 
 .tab:disabled { opacity: 0.35; }
 
-.variant-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-}
-
 .vchip {
   height: 22px;
   padding: 0 7px;
@@ -651,38 +643,60 @@ input:disabled {
   opacity: 0.8;
 }
 
-.ab-row {
+.slot-pickers {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
-.ab {
+.slot-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.slot-lab {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  width: 12px;
+  flex: 0 0 auto;
+}
+
+.slot-pick-a .slot-lab { color: var(--orig); }
+.slot-pick-b .slot-lab { color: var(--up); }
+
+.chip-col {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: var(--mute);
+  gap: 6px;
+  min-width: 0;
 }
 
-.ab span {
-  font-family: var(--mono);
+.chip-lab {
   font-size: 10px;
-  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+  flex: 0 0 auto;
 }
 
-.ab:first-child span { color: var(--orig); }
-.ab:last-child span { color: var(--up); }
-
-.ab select {
-  height: 24px;
-  max-width: 160px;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--bg);
-  padding: 0 4px;
+.res-chips,
+.tech-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.picture[data-mode="single"] ~ .deck #abB { display: none; }
+.picture[data-mode="single"] ~ .deck #slotPickB { display: none; }
+
+#btnSwap { flex: 0 0 auto; }
+
+
 
 /* Transport */
 

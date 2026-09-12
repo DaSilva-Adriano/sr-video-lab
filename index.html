@@ -76,16 +76,30 @@
             <span class="fps-lab">FPS</span>
             <div class="fps-chips" id="fpsChips" role="listbox" aria-label="Frame rate"></div>
           </div>
-          <div class="variant-chips" id="variantChips" aria-label="Resolution"></div>
-          <div class="ab-row" id="abRow">
-            <label class="ab">
-              <span>A</span>
-              <select id="selectA" aria-label="Variant A" disabled></select>
-            </label>
-            <label class="ab" id="abB">
-              <span>B</span>
-              <select id="selectB" aria-label="Variant B" disabled></select>
-            </label>
+          <button type="button" class="btn btn-ghost btn-sm" id="btnSwap" title="Reverse A and B" aria-label="Reverse A and B">Reverse</button>
+          <div class="slot-pickers" id="slotPickers">
+            <div class="slot-pick slot-pick-a" data-slot="A">
+              <span class="slot-lab">A</span>
+              <div class="chip-col">
+                <span class="chip-lab">Res</span>
+                <div class="res-chips" id="resChipsA" role="listbox" aria-label="Resolution A"></div>
+              </div>
+              <div class="chip-col">
+                <span class="chip-lab">Type</span>
+                <div class="tech-chips" id="techChipsA" role="listbox" aria-label="Upscaler A"></div>
+              </div>
+            </div>
+            <div class="slot-pick slot-pick-b" id="slotPickB" data-slot="B">
+              <span class="slot-lab">B</span>
+              <div class="chip-col">
+                <span class="chip-lab">Res</span>
+                <div class="res-chips" id="resChipsB" role="listbox" aria-label="Resolution B"></div>
+              </div>
+              <div class="chip-col">
+                <span class="chip-lab">Type</span>
+                <div class="tech-chips" id="techChipsB" role="listbox" aria-label="Upscaler B"></div>
+              </div>
+            </div>
           </div>
         </div>
 
