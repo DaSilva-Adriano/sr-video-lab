@@ -72,7 +72,7 @@
   var videoA, videoB, videoC, videoD, paneA, paneB, paneC, paneD;
   var missingA, missingB, missingC, missingD, labelA, labelB, labelC, labelD;
   var picture, stage, placeholder, placeholderBody, wipeDivider;
-  var seek, timeLabel, btnPlay, btnMute, saveStatus;
+  var seek, timeLabel, btnPlay, btnMute, btnLoop, saveStatus;
   var libraryList, catChips, dropOverlay;
 
   var fileMap = new Map();
@@ -96,6 +96,7 @@
     wipe: 50,
     wipeAxis: "v",
     muted: false,
+    loop: false,
     hasFolder: false,
     draggingId: null,
     wiping: false,
@@ -1430,6 +1431,7 @@
     muteFollower(videoB);
     muteFollower(videoC);
     muteFollower(videoD);
+    applyLoopFlag();
     if (!g) {
       unloadVideo(videoA, missingA);
       unloadVideo(videoB, missingB);
@@ -1567,6 +1569,49 @@
     btnMute.textContent = state.muted ? "🔇" : "🔊";
     btnMute.setAttribute("aria-pressed", state.muted ? "true" : "false");
     btnMute.classList.toggle("is-on", state.muted);
+  }
+
+  function applyLoopFlag() {
+    var on = !!state.loop;
+    [videoA, videoB, videoC, videoD].forEach(function (v) {
+      if (v) v.loop = on;
+    });
+  }
+
+  function restartFromStart() {
+    try { videoA.currentTime = 0; } catch (err) {}
+    forEachCompareVideo(function (v) {
+      try { v.currentTime = 0; } catch (err) {}
+    });
+    playBoth();
+    updateTransport();
+  }
+
+  function videoAtEnd(video) {
+    if (!video) return false;
+    if (video.ended) return true;
+    var dur = video.duration;
+    var t = video.currentTime || 0;
+    return Number.isFinite(dur) && dur > 0 && t >= dur - 0.05;
+  }
+
+  function updateLoopBtn() {
+    var ids = ["btnLoop", "btnLoopHud"];
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      var el = $(ids[i]);
+      if (!el) continue;
+      el.classList.toggle("is-on", !!state.loop);
+      el.setAttribute("aria-pressed", state.loop ? "true" : "false");
+      el.setAttribute("aria-label", state.loop ? "Loop on" : "Loop off");
+    }
+  }
+
+  function toggleLoop() {
+    state.loop = !state.loop;
+    applyLoopFlag();
+    updateLoopBtn();
+    if (state.loop && videoAtEnd(videoA)) restartFromStart();
   }
 
   function updateTransport() {
@@ -2206,6 +2251,7 @@
     renderSpeeds();
     updatePlaceholder();
     updateMuteBtn();
+    updateLoopBtn();
     updatePlayBtn();
     var gNow = currentGroup();
     if (labelA) labelA.textContent = "A · " + variantLabel(gNow && gNow.variants[state.keyA]);
@@ -2699,6 +2745,7 @@
     state.search = "";
     state.rate = 1;
     state.muted = false;
+    state.loop = false;
     state.wipe = 50;
     state.wipeAxis = "v";
     state.sbsSolo = null;
@@ -2892,6 +2939,12 @@
       videoA.muted = state.muted;
       updateMuteBtn();
     });
+    if (btnLoop) btnLoop.addEventListener("click", toggleLoop);
+    if ($("btnLoopHud")) $("btnLoopHud").addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleLoop();
+    });
     $("btnShot").addEventListener("click", exportScreenshot);
     if ($("btnShotHud")) $("btnShotHud").addEventListener("click", function (e) {
       e.preventDefault();
@@ -3039,7 +3092,13 @@
         try { v.playbackRate = videoA.playbackRate; } catch (err) {}
       });
     });
-    videoA.addEventListener("ended", updatePlayBtn);
+    videoA.addEventListener("ended", function () {
+      if (state.loop) {
+        restartFromStart();
+        return;
+      }
+      updatePlayBtn();
+    });
 
     $("fieldTitle").addEventListener("input", persistInspectorFields);
     $("fieldLicense").addEventListener("input", persistInspectorFields);
@@ -3123,6 +3182,10 @@
         if (e.ctrlKey || e.metaKey) return;
         e.preventDefault();
         resetZoom();
+      } else if (e.key === "l" || e.key === "L") {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        e.preventDefault();
+        toggleLoop();
       } else if (e.key === "s" || e.key === "S") {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         e.preventDefault();
@@ -3198,6 +3261,7 @@
     timeLabel = $("timeLabel");
     btnPlay = $("btnPlay");
     btnMute = $("btnMute");
+    btnLoop = $("btnLoop");
     saveStatus = $("saveStatus");
     libraryList = $("libraryList");
     catChips = $("catChips");

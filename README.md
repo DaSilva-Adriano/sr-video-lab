@@ -56,6 +56,8 @@ Original chips look like `720p` (blue). Upscalers look like `720p · VSR` (amber
 
 Audio comes from A only. B is muted so sound is not doubled. Use the mute toggle for A.
 
+**Loop** (transport ∞, or `L`) repeats the clip from the start when it ends. A is the clock: B / C / D restart with it so compare views stay in sync. Off by default.
+
 ## Fullscreen
 
 Fullscreen is the **picture only** — transport, mode tabs, and chips hide so the video fills the screen. Wipe and side-by-side still work. Space / arrows still control playback. Move the mouse and press `F` or `Esc` to leave.
@@ -74,6 +76,7 @@ Ignored while typing in an input or textarea.
 | Space | Play / pause (toggle) |
 | F8 | Play |
 | F9 | Stop |
+| L | Toggle loop |
 | ← / → | Previous / next frame |
 | Shift + ← / → | Jump ±1 second |
 | 1 / 2 / 3 / 4 | Side by side: full-frame A / B / C / D (press again for split) |
