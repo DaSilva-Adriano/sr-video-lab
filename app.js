@@ -102,7 +102,8 @@
     canWrite: false,
     zoom: 1,
     panX: 0,
-    panY: 0
+    panY: 0,
+    sbsSolo: null
   };
 
   var lastExportJson = "";
@@ -133,6 +134,39 @@
 
   function isQuad() {
     return isCompare() && state.mode !== "wipe" && state.compareCount === 4;
+  }
+
+  function sbsSoloOrder() {
+    return isQuad() ? ["A", "B", "C", "D"] : ["A", "B"];
+  }
+
+  function isSbsSolo() {
+    return state.mode === "sbs" && !!state.sbsSolo;
+  }
+
+  function setSbsSolo(slot) {
+    if (state.mode !== "sbs") return;
+    if (slot && sbsSoloOrder().indexOf(slot) === -1) slot = null;
+    state.sbsSolo = slot || null;
+    applyPaneVisibility();
+    applyZoom();
+  }
+
+  function toggleSbsSolo(slot) {
+    if (state.mode !== "sbs") return;
+    if (sbsSoloOrder().indexOf(slot) === -1) return;
+    setSbsSolo(state.sbsSolo === slot ? null : slot);
+  }
+
+  function cycleSbsSolo(dir) {
+    if (state.mode !== "sbs") return;
+    var order = [null].concat(sbsSoloOrder());
+    var cur = state.sbsSolo || null;
+    var i = 0;
+    for (; i < order.length; i++) if (order[i] === cur) break;
+    if (i >= order.length) i = 0;
+    var next = order[(i + dir + order.length) % order.length];
+    setSbsSolo(next);
   }
 
   function forEachCompareVideo(fn) {
@@ -1579,7 +1613,13 @@
     return !!(picture && placeholder && placeholder.hidden && videoA && videoA.getAttribute("src"));
   }
 
+  function zoomLayoutRect() {
+    if (isSbsSolo()) return picture.getBoundingClientRect();
+    return ((isQuad() || state.mode === "sbs") && paneA ? paneA : picture).getBoundingClientRect();
+  }
+
   function zoomRectForPoint(clientX, clientY) {
+    if (isSbsSolo()) return picture.getBoundingClientRect();
     var panes = isQuad()
       ? [paneA, paneB, paneC, paneD]
       : (state.mode === "sbs" ? [paneA, paneB] : null);
@@ -1602,7 +1642,7 @@
       state.panY = 0;
       return;
     }
-    var rect = ((isQuad() || state.mode === "sbs") && paneA ? paneA : picture).getBoundingClientRect();
+    var rect = zoomLayoutRect();
     if (!rect.width || !rect.height) return;
     var maxX = (rect.width * (state.zoom - 1)) / 2;
     var maxY = (rect.height * (state.zoom - 1)) / 2;
@@ -1680,7 +1720,7 @@
 
   function zoomBy(factor) {
     if (!picture) return;
-    var rect = ((isQuad() || state.mode === "sbs") && paneA ? paneA : picture).getBoundingClientRect();
+    var rect = zoomLayoutRect();
     zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
   }
 
@@ -1702,6 +1742,8 @@
       picture.setAttribute("data-mode", state.mode);
       picture.setAttribute("data-compare", quad ? "4" : "2");
       picture.setAttribute("data-wipe", state.wipeAxis === "h" ? "h" : "v");
+      if (state.mode === "sbs" && state.sbsSolo) picture.setAttribute("data-sbs-solo", state.sbsSolo);
+      else picture.removeAttribute("data-sbs-solo");
     }
   }
 
@@ -1710,6 +1752,7 @@
     var n = g ? variantCount(g) : 0;
     if ((mode === "wipe" || mode === "sbs") && n < 2) mode = "single";
     state.mode = mode;
+    state.sbsSolo = null;
     if (mode === "sbs" && state.compareCount === 4) ensureCDKeys(g);
     applyPaneVisibility();
     var tabs = document.querySelectorAll("#modeTabs .tab");
@@ -1730,6 +1773,7 @@
     if (n === 4 && (!g || variantCount(g) < 2)) n = 2;
     state.compareCount = n;
     lastPick.compareCount = n;
+    if (n !== 4 && (state.sbsSolo === "C" || state.sbsSolo === "D")) state.sbsSolo = null;
     if (n === 4) {
       ensureCDKeys(g);
       if (state.mode === "single" || state.mode === "wipe") {
@@ -1822,6 +1866,7 @@
       if (variantCount(g) < 2) {
         state.mode = "single";
         state.compareCount = 2;
+        state.sbsSolo = null;
       } else {
         if (lastPick.mode === "wipe" || lastPick.mode === "sbs") state.mode = lastPick.mode;
         state.compareCount = lastPick.compareCount === 4 ? 4 : 2;
@@ -2274,6 +2319,10 @@
     var left = slotFileTag(va);
     var zoom = zoomFileTag();
     var ts = stampNow();
+    if (isSbsSolo()) {
+      var sv = g && g.variants[keyForSlot(state.sbsSolo)];
+      return name + "-solo-" + state.sbsSolo + "-" + slotFileTag(sv) + "-" + zoom + "-" + ts + ".png";
+    }
     if (isQuad()) {
       var vc = g && g.variants[state.keyC];
       var vd = g && g.variants[state.keyD];
@@ -2378,6 +2427,11 @@
     var compare = isCompare();
     var quad = isQuad();
 
+    var soloVid = { A: videoA, B: videoB, C: videoC, D: videoD };
+    var soloVar = { A: va, B: vb, C: vc, D: vd };
+    var soloColor = { A: "#6ea8fe", B: "#e8a838", C: "#5eead4", D: "#a78bfa" };
+    var soloAlign = { A: "left", B: "right", C: "left", D: "right" };
+
     if (state.mode === "wipe") {
       drawVideoInPane(ctx, videoB, { x: 0, y: 0, w: w, h: h });
       ctx.save();
@@ -2395,6 +2449,8 @@
         var wx = w * (state.wipe / 100);
         ctx.fillRect(wx - 1, 0, 2, h);
       }
+    } else if (isSbsSolo()) {
+      drawVideoInPane(ctx, soloVid[state.sbsSolo], { x: 0, y: 0, w: w, h: h });
     } else if (quad) {
       drawVideoInPane(ctx, videoA, boxA);
       drawVideoInPane(ctx, videoB, boxB);
@@ -2413,7 +2469,10 @@
     var margin = Math.max(12, Math.round(fontPx * 0.45));
     var zoomPadY = Math.round(fontPx * 0.32);
     var zoomBh = fontPx + zoomPadY * 2;
-    if (quad) {
+    if (isSbsSolo()) {
+      var labX = soloAlign[state.sbsSolo] === "right" ? w - margin : margin;
+      drawShotLabel(ctx, state.sbsSolo + " · " + variantLabel(soloVar[state.sbsSolo]), labX, margin, soloAlign[state.sbsSolo], soloColor[state.sbsSolo], fontPx);
+    } else if (quad) {
       drawShotLabel(ctx, "A · " + variantLabel(va), boxA.x + margin, boxA.y + margin, "left", "#6ea8fe", fontPx);
       drawShotLabel(ctx, "B · " + variantLabel(vb), boxB.x + boxB.w - margin, boxB.y + margin, "right", "#e8a838", fontPx);
       drawShotLabel(ctx, "C · " + variantLabel(vc), boxC.x + margin, boxC.y + margin, "left", "#5eead4", fontPx);
@@ -2642,6 +2701,7 @@
     state.muted = false;
     state.wipe = 50;
     state.wipeAxis = "v";
+    state.sbsSolo = null;
     clearLastPick();
     resetZoom();
     var search = $("search");
@@ -3023,6 +3083,30 @@
         e.preventDefault();
         if (e.shiftKey) jumpSeconds(1);
         else frameStep(1);
+      } else if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "4") {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (state.mode !== "sbs") return;
+        var numSlot = ({ "1": "A", "2": "B", "3": "C", "4": "D" })[e.key];
+        if (sbsSoloOrder().indexOf(numSlot) === -1) return;
+        e.preventDefault();
+        toggleSbsSolo(numSlot);
+      } else if (e.key === "a" || e.key === "A" || e.key === "b" || e.key === "B" || e.key === "c" || e.key === "C" || e.key === "d" || e.key === "D") {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (state.mode !== "sbs") return;
+        var letterSlot = e.key.toUpperCase();
+        if (sbsSoloOrder().indexOf(letterSlot) === -1) return;
+        e.preventDefault();
+        toggleSbsSolo(letterSlot);
+      } else if (e.key === "]" || e.code === "BracketRight") {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (state.mode !== "sbs") return;
+        e.preventDefault();
+        cycleSbsSolo(1);
+      } else if (e.key === "[" || e.code === "BracketLeft") {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (state.mode !== "sbs") return;
+        e.preventDefault();
+        cycleSbsSolo(-1);
       } else if (e.key === "f" || e.key === "F") {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         e.preventDefault();
@@ -3044,6 +3128,10 @@
         e.preventDefault();
         exportScreenshot();
       } else if (e.key === "Escape") {
+        if (state.mode === "sbs" && state.sbsSolo) {
+          e.preventDefault();
+          setSbsSolo(null);
+        }
         $("catModal").hidden = true;
       }
     });

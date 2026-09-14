@@ -48,7 +48,7 @@ c-night-street-1080p-Topaz.mp4
 
 - **Single** — one variant. Switching keeps current time and play/pause.
 - **Wipe** — two stacked videos, draggable vertical divider, synced clocks.
-- **Side by side** — two synced players with A / B labels.
+- **Side by side** — two or four synced players with A / B / C / D labels. Clicking the tab always shows the split. Keys `1`–`4` (or `A`–`D`) put that slot on the full frame; `[` / `]` cycle split → A → B → …; `Esc` or clicking **Side by side** again returns to the split.
 
 On opening a group: **A** = highest original (no tech suffix). **B** = first upscaled variant (prefer same resolution as A). If only originals, A = highest, B = next highest.
 
@@ -76,6 +76,10 @@ Ignored while typing in an input or textarea.
 | F9 | Stop |
 | ← / → | Previous / next frame |
 | Shift + ← / → | Jump ±1 second |
+| 1 / 2 / 3 / 4 | Side by side: full-frame A / B / C / D (press again for split) |
+| A / B / C / D | Same as 1–4 |
+| [ / ] | Side by side: cycle split ↔ each slot full-frame |
+| Esc | Leave full-frame slot (back to split); also closes the categories modal |
 | F | Toggle stage fullscreen |
 
 ## JSON, autosave, delete

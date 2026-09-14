@@ -422,6 +422,16 @@ input:disabled {
   min-height: 0;
 }
 
+.picture:fullscreen[data-mode="sbs"][data-sbs-solo],
+.picture:-webkit-full-screen[data-mode="sbs"][data-sbs-solo] {
+  display: block;
+}
+
+.picture:fullscreen[data-mode="sbs"][data-sbs-solo] .pane,
+.picture:-webkit-full-screen[data-mode="sbs"][data-sbs-solo] .pane {
+  height: 100%;
+}
+
 .picture:fullscreen video,
 .picture:-webkit-full-screen video {
   width: 100%;
@@ -645,6 +655,44 @@ input:disabled {
 }
 .picture[data-mode="sbs"][data-compare="4"] .pane-b { border-bottom: 1px solid var(--line); }
 .picture[data-mode="sbs"][data-compare="4"] .pane-c { border-right: 1px solid var(--line); }
+
+/* SBS solo: one slot takes the full frame; others stay stacked (hidden) so clocks stay in sync */
+.picture[data-mode="sbs"][data-sbs-solo],
+.picture:fullscreen[data-mode="sbs"][data-sbs-solo],
+.picture:-webkit-full-screen[data-mode="sbs"][data-sbs-solo] {
+  display: block;
+}
+.picture[data-mode="sbs"][data-sbs-solo] .pane-a,
+.picture[data-mode="sbs"][data-sbs-solo] .pane-b,
+.picture[data-mode="sbs"][data-compare="4"][data-sbs-solo] .pane-c,
+.picture[data-mode="sbs"][data-compare="4"][data-sbs-solo] .pane-d {
+  position: absolute;
+  inset: 0;
+  flex: none;
+  width: auto;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0 !important;
+  visibility: hidden;
+  z-index: 1;
+}
+.picture[data-mode="sbs"][data-sbs-solo="A"] .pane-a,
+.picture[data-mode="sbs"][data-sbs-solo="B"] .pane-b,
+.picture[data-mode="sbs"][data-compare="4"][data-sbs-solo="C"] .pane-c,
+.picture[data-mode="sbs"][data-compare="4"][data-sbs-solo="D"] .pane-d {
+  visibility: visible;
+  z-index: 2;
+}
+
+.picture[data-mode="sbs"][data-sbs-solo="A"] ~ .deck .slot-pick-a,
+.picture[data-mode="sbs"][data-sbs-solo="B"] ~ .deck .slot-pick-b,
+.picture[data-mode="sbs"][data-sbs-solo="C"] ~ .deck .slot-pick-c,
+.picture[data-mode="sbs"][data-sbs-solo="D"] ~ .deck .slot-pick-d {
+  outline: 1px solid var(--line-2);
+  outline-offset: 3px;
+  border-radius: var(--r);
+}
 
 /* Deck: modes + chips */
 
